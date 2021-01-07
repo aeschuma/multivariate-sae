@@ -1,0 +1,235 @@
+
+#+ header, results='asis', echo=FALSE
+Pmisc::markdownHeader(     
+    title="Child mortality",     
+    author='Patrick Brown',
+    geometry='margin=1in,landscape',     
+    css = system.file(file.path('src','webpage.css'), package='Pmisc')
+)
+#'
+#' 
+#+ data
+
+milliondeaths::getMdsPassword(prompt=FALSE)
+
+
+theCodes = milliondeaths::getWbdCodes(c(
+          'Injuries','Malaria','Diarrhoeal','Meningitis/encephalitis',
+          'Tuberculosis','Birth asphyxia, birth trauma',
+         'Measles','Protein-energy malnutrition',
+         'Venomous snakes, animals, plants' ))
+
+dataFile = file.path("data/child.rds")
+if(!file.exists(dataFile)) {
+  allData = milliondeaths::mdsPoisson(
+      codeList = theCodes,
+      year = 2004:2014,
+      age = c(0,1,5,10,15),
+      spatial=TRUE,
+      verbose=TRUE)
+  saveRDS(allData, file=dataFile)
+}
+allData = readRDS(dataFile)
+#'
+#' 
+
+
+#+ remoteInlaSetup, include=FALSE
+# function for windows
+myInla = function(file.ini, file.log,
+    results.dir, inla.call.args) {
+  
+  plinkDir = file.path('c:','Users','brownpa','programs','x2go')
+  userhost = 'patrick@darjeeling.pbrown.ca'
+  RemoteINLA = file.path(
+      "/home/patrick/R",
+      "x86_64-pc-linux-gnu-library/3.5",
+      "INLA/bin/linux/64bit/inla.run")
+  
+  sshcmd = file.path(plinkDir, 'plink.exe')
+  scpcmd = file.path(plinkDir, 'pscp.exe')
+  
+  rdir=paste('/tmp/inla.remote.patrick/inla.remote.', 
+      format(Sys.time(), "%Y-%m-%d-%a-%H:%M:%S_"), 
+      stats::runif(1), sep='')
+  userhostrdir = paste(userhost, ":", rdir, sep='')
+  
+  
+  modelIni  <- readLines(file.ini)
+  modelIni2  <- gsub("##inladatadir", "inladatadir", modelIni)
+  modelIni3  <- gsub("##inlaresdir", "inlaresdir", modelIni2)
+  modelIni4  <- gsub("C[:][/].*[/]Rtmp[[:alnum:]]+[/]file[[:alnum:]]+[/]", "", modelIni3)
+  writeLines(modelIni4, con=file.ini)
+  
+  dosCommand = "CMD /c"
+  
+  copyCommand = paste(dosCommand, scpcmd, '-C -r', 
+      file.path(dirname(file.ini), "*"), userhostrdir)
+  
+  inlaCommand = paste(dosCommand, sshcmd, userhost, 
+      '"cd', rdir, "; pwd;", RemoteINLA, inla.call.args, 
+      'Model.ini < /dev/null"') 
+  
+  retrCommand = paste(dosCommand, ' ', scpcmd, ' -C -r ', 
+      userhostrdir, '/results.files* ', 
+      file.path(dirname(file.ini), 'results.files'),
+      sep='')
+  
+  verbose = as.logical(grep("[-]v( |$)", inla.call.args))
+  
+  system(paste(dosCommand, sshcmd, userhost, 'mkdir -p', rdir), 
+      show.output.on.console = verbose)  
+  
+  if(verbose) cat('\n', copyCommand,'\n')
+  system(copyCommand,show.output.on.console = verbose)  
+  
+  if(verbose) cat('\n', inlaCommand,'\n')
+  system(inlaCommand,show.output.on.console = verbose)  
+  
+  if(verbose) cat('\n', retrCommand,'\n')
+  res = system(retrCommand,show.output.on.console = verbose)  
+  
+  return(res)
+}
+
+# init file for linux
+if(.Platform$OS.type=='unix') {
+  cat('
+
+          PardisoLicenseFile="/home/patrick/sys/licenses/pardiso.lic"
+  
+          ### The name of the remote host.
+          RemoteHost="darjeeling.pbrown.ca"
+          
+          ### The username on the remote host
+          RemoteUser="patrick"
+          
+          ### Full path to the inla-program on the remote host. If you use the
+          ### buildtin version, you can find it using INLA:::inla.call.builtin()
+          ### on the remote host
+          RemoteINLA="/home/patrick/R/x86_64-pc-linux-gnu-library/3.5/INLA/bin/linux/64bit/inla.run"
+          
+          ### Arguments to ssh. Usually no need to change this
+          sshArguments="-x -o BatchMode=yes -o TCPKeepAlive=yes -e none"
+          
+          ### Port number
+          Port=22
+          ', 
+      file = '~/.inlarc')      
+}
+if(.Platform$OS.type=='unix') {
+  theInlaCall = 'remote'
+} else {
+  theInlaCall = myInla
+}
+
+#'
+#+ glgm, cache=TRUE
+x = allData$data[which(allData$data$pop>0), ]
+x$logPop = log(x$pop)
+x$sexInt = as.integer(x$sex)
+
+Syear = sort(unique(x$year))
+
+fit = geostatsp::glgm(
+	Diarrhoeal ~ offset(logPop) + 
+	f(ageCut,
+		 replicate=sexInt, model='iid', constr=TRUE,
+		param=0.001, fixed=TRUE) + 
+	f(year, 
+		model='rw2', values=Syear, constr=FALSE, 
+		extraconstr=list(A=matrix(as.numeric(Syear == 2010), nrow=1), e=0),
+		prior = 'pc.prec', param = c(0.01, 0.5)
+		),
+	family='poisson',
+	grid = milliondeaths::indiaGrid,
+	data = x[1:500000,],
+	prior = list(sd = 1, range = 500*1000),
+	control.inla = list(strategy='gaussian'),
+	inla.call = myInla,
+	verbose = TRUE
+	)
+#' 
+#+ glmm, eval=FALSE
+
+xSub = x@data[,c('Diarrhoeal','logPop','ageCut','sex','sexInt','year')]
+
+fit2 = INLA::inla(
+	Diarrhoeal ~ offset(logPop) + 
+	f(ageCut, replicate=sexInt, model='iid', constr=TRUE,
+		param=0.001, fixed=TRUE) +
+	f(year, 
+		model='rw2', values=Syear, constr=FALSE, 
+		extraconstr=list(A=matrix(as.numeric(Syear == 2010), nrow=1), e=0),
+		prior = 'pc.prec', param = c(0.01, 0.5)
+		),
+	family='poisson',
+	data = xSub[(1:500000),],
+	control.inla = list(strategy='gaussian'),
+	inla.call = myInla,
+	verbose = TRUE
+	)
+
+fit3 = INLA::inla(
+	Diarrhoeal ~ offset(logPop) + ageCut*sex ,
+	family='poisson',
+	data = x@data
+	)
+
+	+ f(
+		year, model='rw2', values=Syear, constr=FALSE, 
+		extraconstr=list(A=matrix(as.numeric(Syear == 2010), nrow=1), e=0),
+		prior = 'pc.prec', param = c(0.01, 0.5)
+		),
+
+#' 
+#+ resultTable
+knitr::kable(fit$parameters$summary)
+#'  
+#+ plotTime
+matplot(
+	Syear, 
+	exp(fit$inla$summary.random$year[, paste0(c(0.5, 0.025, 0.975),'quant')]),
+	type = 'l', lty=c(1,2,2), col='black', log='y',
+	xlab = 'year', ylab='rr')
+#' 
+#' 
+#+ bgMap, cache=TRUE
+theBgMap = mapmisc::tonerToTrans(mapmisc::openmap(
+	x$raster, path='stamen-toner'
+	))
+
+#'
+#' 
+#+ riskMap
+toPlot = fit$raster[['predict.exp']]
+theCol = mapmisc::colourScale(toPlot, col='Spectral', breaks=8, dec=1)
+mapmisc::map.new(x$raster)
+plot() 
+#' 
+#' 
+#' 
+#' 
+require('mapmisc')
+require('milliondeaths')
+
+mapmisc::map.new(india)
+plot(language, 
+    col=language$col,
+    density=40,
+    add=TRUE, border=mapmisc::col2html('black', 0.2))
+
+plot(language[!language$toLabel,], 
+    col=language@data[!language$toLabel, 'col'],
+    add=TRUE, border=NA)
+
+
+text(
+    SpatialPoints(language[language$toLabel,])@coords,
+    language@data[language$toLabel,'language'],
+    col='black')
+
+mapmisc::legendBreaks('bottomright', 
+    breaks = language@data[language$toLegend,'language'], 
+    col=language@data[language$toLegend,'col'],
+    bty='n')

@@ -1,0 +1,92 @@
+# Austin Schumacher
+# 8/30/2020
+# run vgam example
+# run svyvgam example
+# compare svyvgam to svyglm for a binomial model (from MDS data)
+
+rm(list = ls())
+
+library(VGAM); library(devtools); library(survey); library(milliondeaths); library(tidyverse); library(SUMMER);
+
+# I now got svyVGAM to install via:
+# install_github("https://github.com/tslumley/svyvgam")
+
+library(svyVGAM)
+
+# load MDS data
+dat <- readRDS("~/Dropbox/csmr_india/data/mds/all_child_deaths_0to1to5_yearly_2004thru2013_allChildCodesWithAllcause.RDS")
+tmpdat <- dat$data@data
+
+# ## test VGAM package first
+# 
+# # load data
+# tmpdat.long <- tmpdat %>% 
+#     mutate(other = allcause - Prematurity.low.birthweight) %>% 
+#     dplyr::select(srs_id, urban_rural, weight_alan, Prematurity.low.birthweight, other) %>%
+#     pivot_longer(cols = c(Prematurity.low.birthweight, other),
+#                  names_to = "cause",
+#                  values_to = "deaths")
+# 
+# # test matrix formulation of outcome with no all-sero rows
+# outcome <- cbind(tmpdat$Prematurity.low.birthweight, tmpdat$allcause - tmpdat$Prematurity.low.birthweight)
+# outcome_noall0 <- cbind(tmpdat$Prematurity.low.birthweight[tmpdat$allcause != 0], tmpdat$allcause[tmpdat$allcause != 0] - tmpdat$Prematurity.low.birthweight[tmpdat$allcause != 0])
+# mult.injuries.naive <- vglm(outcome_noall0 ~ 1, family = multinomial)
+# 
+# # test expanding the dataset with one observation for each death and using a factor as outcome
+# tmpdat.expanded <- tmpdat %>% 
+#     filter(allcause != 0) %>%
+#     mutate(other = allcause - Prematurity.low.birthweight) %>% 
+#     dplyr::select(srs_id, year, sex, age, state_code, state, urban_rural, weight_alan, Prematurity.low.birthweight, other) %>%
+#     pivot_longer(cols = c(Prematurity.low.birthweight, other),
+#                  names_to = "cause",
+#                  values_to = "deaths") %>%
+#     group_by(srs_id, year, sex, age, state_code, state, urban_rural, cause) %>% 
+#     uncount(deaths) %>% 
+#     ungroup() %>%
+#     mutate(death = 1)
+# 
+# # fit model
+# mult.injuries.naive.factor <- vglm(cause ~ 1, family = multinomial, data = tmpdat.expanded)
+
+# using svyVGAM functions for multinomial regression
+
+# first get data with no all-zero rows
+tmpdat_noall0 <- tmpdat[tmpdat$allcause != 0,]
+my.svydesign.mult.noall0 <- survey::svydesign(ids = ~ srs_id,
+                                              strata = ~ urban_rural, 
+                                              nest = T, 
+                                              weights = ~ weight_alan, 
+                                              data = tmpdat_noall0)
+
+mult.prem_noall0 <- svy_vglm(cbind(Prematurity.low.birthweight, allcause - Prematurity.low.birthweight) ~ 1, 
+                             family = multinomial, 
+                             design = my.svydesign.mult.noall0)
+mult.prem_noall0$coef
+(mult.prem_noall0$var)^0.5
+
+# test vs data with all 0 rows
+my.svydesign.mult <- survey::svydesign(ids = ~ srs_id,
+                                       strata = ~ urban_rural,
+                                       nest = T,
+                                       weights = ~ weight_alan,
+                                       data = tmpdat)
+
+#### commented out because THIS GIVES AN ERROR!!!!####
+# mult.prem <- svy_vglm.survey.design(cbind(Prematurity.low.birthweight, allcause - Prematurity.low.birthweight) ~ 1, 
+#                                            family = multinomial, 
+#                                            design = my.svydesign.mult)
+# expit(mult.prem$coef)
+
+# test vs svyglm no all 0 rows
+bin.prem_noall0 <- svyglm(cbind(Prematurity.low.birthweight, allcause - Prematurity.low.birthweight) ~ 1, 
+                          family = binomial, 
+                          design = my.svydesign.mult.noall0)
+coef(summary(bin.prem_noall0))
+
+# test vs svyglm all data
+bin.prem <- svyglm(cbind(Prematurity.low.birthweight, allcause - Prematurity.low.birthweight) ~ 1, 
+                   family = binomial, 
+                   design = my.svydesign.mult)
+coef(summary(bin.prem))
+
+## YAY THEY'RE ALL THE SAME!
