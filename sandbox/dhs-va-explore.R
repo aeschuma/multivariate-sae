@@ -54,7 +54,7 @@ tmpdat <- rbind(datVA1 %>% dplyr::select(all_of(varnames)),
                 datVA2 %>% dplyr::select(all_of(varnames)))
 
 table(tmpdat$agecat)
-table(tmpdat$qv305z)
+table(tmpdat$yod)
 
 # 4 years of data
 
@@ -86,7 +86,7 @@ table(tmpdat$icd10_condensed)
 table(tmpdat$qhprov)
 
 # crosstabs
-table(tmpdat$agecat, tmpdat$qv305z)
+table(tmpdat$agecat, tmpdat$yod)
 table(tmpdat$agecat, tmpdat$icd10_condensed)
 table(tmpdat$agecat, tmpdat$qhprov)
 table(tmpdat$qv305z, tmpdat$icd10_condensed)
@@ -122,13 +122,14 @@ dat_ind$died <- ifelse(dat_ind$outcome == "alive", 0, 1)
 
 # reshape wide by cause
 dat_ind_wide <- dat_ind %>% 
-    to_dummy(died, suffix = "label") %>% 
+    to_dummy(died, suffix = "numeric") %>% 
     bind_cols(dat_ind)
-dat_ind_wide$alive <- dat_ind_wide$V1
-dat_ind_wide$dead <- dat_ind_wide$V2
-
+dat_ind_wide$alive <- dat_ind_wide$`...1`
+dat_ind_wide$dead <- dat_ind_wide$`...2`
+dat_ind_wide$`...1` <- NULL
+dat_ind_wide$`...2` <- NULL
 # age groups
-# dat_ind_wide$age <- ifelse(dat_ind_wide$nmonths)
+
 
 # fit preliminary model
 my.svydesign <- survey::svydesign(ids = ~ qhclust,
@@ -147,11 +148,11 @@ dat_ind_wide$year <- as.character(dat_ind_wide$yod)
 dat_ind_wide$strata <- as.character(dat_ind_wide$qhtype)
 summer.mod <- getDirect(births = dat_ind_wide,
                         years = c("1386","1387","1388","1389"),
-                        regionVar = "qhprov",
+                        regionVar = NULL,
                         weightsVar = "qhweight", 
                         clusterVar = "~qhclust", 
-                        ageVar = "agecat",
-                        timeVar = "year")
+                        ageVar = NULL,
+                        timeVar = NULL)
 
 #-------------
 # Aggregated data
