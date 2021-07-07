@@ -1,0 +1,209 @@
+---
+title: 'Stage 1 modeling simulation to assess coverage: testing the binomial case'
+author: "Austin Schumacher"
+date: "`r Sys.Date()`"
+output: 
+    pdf_document:
+        toc: true
+        toc_depth: 4
+        includes: 
+            in_header: "/Users/austin/Desktop/work/presentation_publication_resources/mycommands.tex"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE, cache = TRUE)
+library(tidyverse); library(survey); library(svyVGAM); library(VGAM); library(magrittr);
+library(Hmisc); library(SUMMER); library(mvtnorm);
+```
+
+# Binomial modeling
+
+## Data generating mechanism
+
+For 100,000 women, the number of births were generated from a Poisson distribution with rate of 3. We then generate deaths for these children using the following process.
+
+Let $i = 1, \dots, N = 100000$ index individuals, let $t = 0, \dots, T = 59$ index time in months, and define $T_i$ the time of observation for individual $i$. Divide the $60$ months into $J = 6$ age groups indexed by $j[t]$ such that 
+
+$$j[t] = \begin{cases}
+1 \text{ if } t = 0 \\
+2 \text{ if } 1 \leq t \leq 11 \\
+3 \text{ if } 12 \leq t \leq 23 \\
+4 \text{ if } 24 \leq t \leq 35 \\
+5 \text{ if } 36 \leq t \leq 47 \\
+6 \text{ if } 48 \leq t \leq 59
+\end{cases}$$
+
+For each individual, we will run Bernoulli trials starting at time $t = 0$ until the first death. These trials will have different probabilities of death for each age group, $\pi_{j[t]}$. The time of death for individual $i$ will be $T_i$. All Bernoulli trials are independent. We will specify regression parameters for a logistic regression model to generate the data. Thus, for $i = 1, \dots, N$ and $t = 1, \dots, T_i$, we have
+
+\eq{
+    y_{it} | \pi_{it} &\sim \mbox{Bernoulli}(\pi_{it}) \\
+    \mbox{logit}(\pi_{it}) &= \beta_{j[t]}
+}
+
+For all models, we will organize the data such that each observation is a person-month, so individual $i$ will contribute a sequence of $T_i - 1$ 0's followed by a single 1 for month $T_i$ (unless no death was observed, in which case there will be all 0's), and each of these 0s and 1s will be its own row in the data set.
+
+We will set the $\beta_{j[t]}$ parameters such that the age-group-specific monthly probabilities $(\mbox{expit}(\beta_1), \dots, \mbox{expit}(\beta_6)) = (0.04, 0.005, 0.004, 0.003, 0.002, 0.001)$.
+
+Here is the code to generate the population:
+
+```{r generation-bin}
+# function to calculate 5q0^c from multinomial model
+get_5q0_bin <- function(beta, n) {
+    ## For testing
+    # beta <- coef(bin.mod)
+    # n <- c(1, 11, 12, 12, 12, 12)
+    
+    probs <- expit(beta)
+    mean.est <- (1 - prod((1 - probs)^n, na.rm = TRUE))
+    return(mean.est)
+}
+
+# params
+Nw <- 100000 # number of women
+Nc <- 500 # number of clusters
+nc <- 25 # number of sampled clusters
+nw <- 30 # number of sampled women in each cluster
+birth_lambda <- 3
+nbirths <- rpois(Nw, birth_lambda)
+clusterid <- sort(sample(1:Nc, Nw, replace = TRUE))
+Nwc <- as.vector(table(clusterid))
+weights <- (Nc/nc) * (Nwc/nw)
+clusterprobs <- 1/weights
+
+# create data set for population where each row is a birth 
+# and simulate deaths
+dat <- tibble(motherid = 1:Nw,
+              clusterid = clusterid) %>%
+    group_by(clusterid) %>%
+    mutate(withinclustermotherid = sequence(n()))
+dat <- dat[rep(1:Nw, times = nbirths),]
+weights.dat <- tibble(clusterid = 1:Nc,
+                      weight = weights,
+                      prob = clusterprobs)
+dat %<>% left_join(weights.dat, by = "clusterid") %>%
+    group_by(motherid) %>%
+    mutate(birthid = sequence(n())) %>%
+    ungroup()  %>%
+    mutate(id = 1:n(),
+           clustermotherbirthid = paste(clusterid, motherid, birthid, sep = "_"),
+           clustermotherid = paste(clusterid, withinclustermotherid, sep = "_"))
+
+# simulate deaths
+N <- nrow(dat)
+T <- 60
+J <- 6
+
+probs <- c(0.04, 0.005, 0.004, 0.003, 0.002, 0.001)
+betas <- logitlink(probs)
+ns <- c(1, 11, 12, 12, 12, 12)
+pis <- rep(probs, times = ns)
+
+dat <- dat[rep(1:N, each = T + 1), ]
+dat$t <- rep((0:T), N)
+dat$a <- rep(rep(1:(J + 1), times = c(ns, 1)), N)
+dat$y <- rbinom((T+1) * N, 1, rep(c(pis, 1), N))
+dat %<>% group_by(id) %>%
+    filter(cumsum(cumsum(y == 1)) <= 1L) %>%
+    ungroup() %>%
+    filter(a != 7)
+
+# get 5q0
+dat_ind <- dat %>% group_by(id) %>%
+    slice_tail(n = 1)
+true5q0 <- mean(dat_ind$y)
+```
+
+## Cluster sampling coverage simulation
+
+After we have this population of children, we will perform $S = 100$ simulations where we perform a two stage cluster sampling design, fit a logistic regression model to estimate monthly probabilities of death, calculate a 95\% CI for estimated $\nqx{5}{0}$ based on our design-based asymptotic variance estimator, and assess whether it covers the true value of $\nqx{5}{0}$ from the population. 
+
+At the first stage of our two-stage cluster sampling design, $n_c$ clusters were randomly selected from the $N_c$ available. At the second stage, suppose cluster $c$ is selected, then $n_W$ women were randomly selected from the $N_{Wc}$ total women within the selected cluster. The resulting sampling weight for a woman in cluster $c$ is
+
+$$w_{Ec} = \frac{N_c}{n_c} \times \frac{N_{Wc}}{n_W}$$
+
+We set $N_c = 500$, $n_c = 25$, and $n_W = 30$. Note that $N_{Wc}$ is random due to the random allocation of the 100,000 women to the 500 clusters. 
+
+We will then fit a logistic regression model with $J$ age-group-specific intercepts and no overall intercept, accounting for the survey design using the `survey` package in R. We will then extract the covariance matrix and use the delta method to calculate an asymptotic design-based variance estimate. We will use this to calculate a 95\% CI and assess whether it covers the true population $\nqx{5}{0}$.
+
+Here is the code for simulation:
+
+```{r simulation-bin}
+# set seed
+set.seed(69)
+
+# parameters
+nsim <- 100
+ns <- c(1, 11, 12, 12, 12, 12)
+
+# results storage
+coverage.delta <- rep(NA, nsim)
+coverage.jack <- rep(NA, nsim)
+
+# start simulations
+for (s in 1:nsim) {
+    # testing
+    # s <- 1
+    
+    # sample selection
+    sampled_clusters <- sample(1:Nc, nc, replace = FALSE)
+    sampled_women <- vector(mode = "list", length = nc)
+    for (c in 1:length(sampled_clusters)) {
+        sampled_women[[c]] <- sample(1:Nwc[sampled_clusters[c]], nw, replace = FALSE)
+    }
+    sampled_ids <- tibble(clusterid = rep(sampled_clusters, each = nw),
+                          withinclustermotherid = unlist(sampled_women)) %>%
+        mutate(clustermotherid = paste(clusterid, withinclustermotherid, sep = "_"))
+    dat.sampled <- dat %>% filter(clustermotherid %in% sampled_ids$clustermotherid)
+
+    # survey design
+    my.svydesign <- survey::svydesign(ids = ~ clusterid, 
+                                      strata = NULL, weights = ~ weight, 
+                                      data = dat.sampled)
+    
+    ## binomial model
+    bin.mod <- svyglm(y ~ -1 + factor(a), rescale = TRUE,
+                      family = quasibinomial(),
+                      design = my.svydesign)
+    betas <- coef(bin.mod)
+    V <- vcov(bin.mod)
+    
+    # estimates with delta method var
+    mean.est <-get_5q0_bin(betas, ns)
+    logit.mean.est <- logitlink(mean.est)
+    
+    ## partial derivatives ##
+    gamma <- prod((1 + exp(betas))^ns, na.rm = TRUE)
+    derivatives <- (gamma)/(gamma - 1) * ns * expit(betas)
+    
+    ## asymptotic var
+    var.est <- t(derivatives) %*% V %*% derivatives
+    bounds.delta <- expit(rep(logit.mean.est, 2) + rep(var.est^0.5, 2)*qnorm(c(0.025, 0.975)))
+    coverage.delta[s] <- (true5q0 > bounds.delta[1]) & (true5q0 < bounds.delta[2])
+    
+    ## jackknife estimator
+    jack5q0s <- rep(NA, nc)
+    clusts <- unique(dat.sampled$clusterid)
+    for (cc in 1:nc) {
+        clust <- clusts[cc]
+        tmp <- dat.sampled[dat.sampled$clusterid != clust,]
+        
+        my.svydesign.tmp <- survey::svydesign(ids = ~ clusterid, 
+                                              strata = NULL, weights = ~ weight, 
+                                              data = tmp)
+    
+        ## binomial model
+        bin.mod.tmp <- svyglm(y ~ -1 + factor(a), rescale = TRUE,
+                              family = quasibinomial(),
+                              design = my.svydesign.tmp)
+        betas <- coef(bin.mod.tmp)
+        
+        # estimates
+        jack5q0s[cc] <-get_5q0_bin(betas, ns)
+    }
+    Vjack <- ((nc - 1)/nc) * sum((jack5q0s - mean.est)^2)
+    bounds.jack <- rep(mean.est, 2) + rep(Vjack^0.5, 2)*qnorm(c(0.025, 0.975))
+    coverage.jack[s] <- (true5q0 > bounds.jack[1]) & (true5q0 < bounds.jack[2])
+}
+mean(coverage.delta)
+mean(coverage.jack)
+```

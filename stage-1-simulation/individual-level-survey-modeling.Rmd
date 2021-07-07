@@ -1,0 +1,659 @@
+---
+title: "Individual-level discrete time competing risks survival modeling"
+author: "Austin Schumacher"
+date: "`r Sys.Date()`"
+output: 
+    pdf_document:
+        includes: 
+            in_header: "/Users/austin/Desktop/work/presentation_publication_resources/mycommands.tex"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, cache = TRUE)
+```
+
+# Simulation using "fake" data
+
+## Multinomial
+
+### 3 categories
+
+We will first simulate $n$ draws from a multinomial distribution with 3 categories
+
+```{r}
+library(devtools)
+# install_github("https://github.com/richardli/SUMMER/tree/dev") # Johnny's dev version with pop sim functions
+library(svyVGAM)
+library(INLA)
+library(SUMMER)
+library(fields)
+library(tidyverse)
+library(magrittr)
+library(data.table)
+library(mvtnorm)
+
+# set seed
+set.seed(98125)
+
+# sim setup and storage of results
+nsim <- 100
+p.res <- matrix(NA, nrow = nsim, ncol = 2)
+coverage.res <- matrix(NA, nrow = nsim, ncol = 2)
+cov.res <-array(NA, dim = c(2, 2, nsim))
+
+# parameters
+n <- 1000
+alpha <- c(-2, -1)
+denom_p <- sum(exp(alpha)) + 1
+p_cause <- c(exp(alpha)/denom_p)
+p <- c(p_cause, 1 - sum(p_cause))
+
+for (s in 1:nsim) {
+    # cat(paste0("Starting sim ", s, "....\n"))
+    # simulate data
+    y <- rmultinom(n, 1, p)
+    dat <- data.frame(obs = 1:n,
+                      cause1 = y[1,],
+                      cause_other = y[2,],
+                      alive = y[3,])
+    
+    # fit model
+    my.svydesign <- survey::svydesign(ids = ~ 1,
+                                      data = dat)
+    
+    mult.mod <- svy_vglm(cbind(cause1, cause_other, alive) ~ 1, 
+                         family = multinomial, 
+                         design = my.svydesign)
+    denom <- 1 + sum(exp(mult.mod$coef))
+    p.res[s, ] <- exp(mult.mod$coef)/denom
+    cis <- confint(mult.mod)
+    coverage.res[s, 1] <- alpha[1] > cis[1, 1] & alpha[1] < cis[1, 2]
+    coverage.res[s, 2] <- alpha[2] > cis[2, 1] & alpha[2] < cis[2, 2]
+    cov.res[,,s] <- mult.mod$var
+}
+
+boxplot(p.res[, 1], main = "Posterior medians of p1", ylim = range(c(p.res[, 1], p[1])))
+abline(h = p[1], col = "red")
+
+boxplot(p.res[, 2], main = "Posterior medians of p2", ylim = range(c(p.res[, 2], p[2])))
+abline(h = p[2], col = "red")
+
+apply(coverage.res, 2, mean)
+
+apply(cov.res, c(1, 2), mean)
+```
+
+## Individual-level SRS
+
+### 3 categories (1 cause, all other causes, and alive), no age modeling
+
+We will simulate $n$ individuals over 60 months, where in each month for all alive individuals, we apply the multinomial probabilities of dying from cause 1, dying from all other causes, or remaining alive.
+
+Thus, we have the discrete-time survival data generating mechanism as follows:
+
+TODO write this up
+
+```{r}
+# sim setup and storage of results
+nsim <- 100
+p.res <- matrix(NA, nrow = nsim, ncol = 2)
+coverage.res <- matrix(NA, nrow = nsim, ncol = 2)
+cov.res <-array(NA, dim = c(2, 2, nsim))
+
+# parameters
+n <- 1000
+alpha <- c(-4, -3)
+denom_p <- sum(exp(alpha)) + 1
+p_cause <- c(exp(alpha)/denom_p)
+p <- c(p_cause, 1 - sum(p_cause))
+p_cum <- cumsum(p)
+
+for (s in 1:nsim) {
+    # simulate data
+    y <- vector(mode = "list", length = n)
+    for(i in 1:n) {
+        y[[i]] <- matrix(NA, ncol = 5, nrow = 60)
+        y[[i]][, 4] <- i # person id
+        y[[i]][, 5] <- 1:60 # month indicator
+        # cat(paste("\nStarting person", i, "\n"))
+        t <- 1
+        death <- 0
+        while(death == 0) {
+            # if (t %% 10 == 0) cat(paste("\t month", t, "\n"))
+            rand <- runif(1, 0, 1)
+            if (rand < p_cum[1]) {
+                y[[i]][t, 1:3] <- c(1, 0, 0)
+                death <- 1
+            } else if (rand >= p_cum[1] & rand < p_cum[2]) {
+                y[[i]][t, 1:3] <- c(0, 1, 0)
+                death <- 1
+            } else {
+                y[[i]][t, 1:3] <- c(0, 0, 1)
+            }
+            t <- t + 1
+            if (t == 60) death <- 1
+        }
+    }
+    
+    ymat <- do.call(rbind, y)
+    ymat <- ymat[complete.cases(ymat), ]
+    
+    # create data frame
+    dat <- data.frame(id = ymat[, 4],
+                      time = ymat[, 5],
+                      cause1 = ymat[, 1],
+                      cause_other = ymat[, 2],
+                      alive = ymat[, 3])
+    
+    # fit model
+    my.svydesign <- survey::svydesign(ids = ~ id,
+                                      data = dat)
+    
+    mult.mod <- svy_vglm(cbind(cause1, cause_other, alive) ~ 1, 
+                         family = multinomial, 
+                         design = my.svydesign)
+    denom <- 1 + sum(exp(mult.mod$coef))
+    p.res[s, ] <- exp(mult.mod$coef)/denom
+    cis <- confint(mult.mod)
+    coverage.res[s, 1] <- alpha[1] > cis[1, 1] & alpha[1] < cis[1, 2]
+    coverage.res[s, 2] <- alpha[2] > cis[2, 1] & alpha[2] < cis[2, 2]
+    cov.res[,,s] <- mult.mod$var
+}
+
+# results
+boxplot(p.res[, 1], main = "Posterior medians of p1", ylim = range(c(p.res[, 1], p[1])))
+abline(h = p[1], col = "red")
+
+boxplot(p.res[, 2], main = "Posterior medians of p2", ylim = range(c(p.res[, 2], p[2])))
+abline(h = p[2], col = "red")
+
+apply(coverage.res, 2, mean)
+
+apply(cov.res, c(1, 2), mean)
+```
+
+### 3 categories (1 cause, all other causes, and alive), age-group-specific intercepts
+
+We will again simulate $n$ individuals over 60 months, where in each month for all alive individuals, we apply the multinomial probabilities of dying from cause 1, dying from all other causes, or remaining alive. This time, those probabilities are allowed to vary in 6 different age bands.
+
+```{r}
+# sim setup and storage of results
+nsim <- 50
+alpha.res <- matrix(NA, nrow = nsim, ncol = 12)
+coverage.res <- matrix(NA, nrow = nsim, ncol = 12)
+cov.res <-array(NA, dim = c(12, 12, nsim))
+
+# parameters
+n <- 1000
+alpha <- matrix(c(seq(-4, -6, length.out = 6), seq(-3, -5.5, length.out = 6)), 
+                nrow = 6, ncol = 2)
+alpha_vec <- as.vector(alpha)
+denom_p <- apply(alpha, 2, function(x){sum(exp(x)) + 1})
+p_cause <- cbind(exp(alpha[,1])/denom_p[1], exp(alpha[,2])/denom_p[2])
+p <- cbind(p_cause, 1 - apply(p_cause, 1, sum))
+p_cum <- apply(p, 1, cumsum)
+p_cum_monthly <- p_cum[,c(1, rep(2,11), rep(c(3,4,5,6), each = 12))]
+    
+# simulate data
+for (s in 1:nsim) {
+    # simulate data
+    y <- vector(mode = "list", length = n)
+    for(i in 1:n) {
+        y[[i]] <- matrix(NA, ncol = 6, nrow = 60)
+        y[[i]][, 4] <- i # person id
+        y[[i]][, 5] <- 1:60 # month indicator
+        y[[i]][, 6] <- c(1, rep(2,11), rep(c(3,4,5,6), each = 12)) # age group indicator
+        # cat(paste("\nStarting person", i, "\n"))
+        t <- 1
+        death <- 0
+        while(death == 0) {
+            # if (t %% 10 == 0) cat(paste("\t month", t, "\n"))
+            rand <- runif(1, 0, 1)
+            if (rand < p_cum_monthly[1, t]) {
+                y[[i]][t, 1:3] <- c(1, 0, 0)
+                death <- 1
+            } else if (rand >= p_cum_monthly[1, t] & rand < p_cum_monthly[2, t]) {
+                y[[i]][t, 1:3] <- c(0, 1, 0)
+                death <- 1
+            } else {
+                y[[i]][t, 1:3] <- c(0, 0, 1)
+            }
+            t <- t + 1
+            if (t == 60) death <- 1
+        }
+    }
+    
+    ymat <- do.call(rbind, y)
+    ymat <- ymat[complete.cases(ymat), ]
+    
+    # create data frame
+    dat <- data.frame(id = ymat[, 4],
+                      time = ymat[, 5],
+                      cause1 = ymat[, 1],
+                      cause_other = ymat[, 2],
+                      alive = ymat[, 3],
+                      agegp = ymat[, 6])
+    
+    # fit model
+    my.svydesign <- survey::svydesign(ids = ~ id,
+                                      data = dat)
+    
+    mult.mod <- svy_vglm(cbind(cause1, cause_other, alive) ~ -1 + factor(agegp), 
+                         family = multinomial, 
+                         design = my.svydesign)
+    alpha.res[s,] <- coef(mult.mod)[c(1,3,5,7,9,11,2,4,6,8,10,12)]
+    cis <- confint(mult.mod)[c(1,3,5,7,9,11,2,4,6,8,10,12),]
+    coverage.res[s, ] <- alpha_vec > cis[,1] & alpha_vec < cis[,2]
+    cov.res[,,s] <- mult.mod$var
+}
+
+# results
+boxplot(alpha.res, use.cols= TRUE, main = "Posterior medians of alpha parameters")
+points(1:12, alpha_vec, col = "red", pch = 19)
+
+apply(coverage.res, 2, mean)
+
+apply(cov.res, c(1, 2), mean)
+```
+
+# Simulation with Kenya-like data
+
+First, we will simulate a population of births in enumeration areas (point locations) using an inhomogeneous Poisson process with rate proportional to population density in Kenya (using data from IPUMS). 
+
+TODO extract this same info for BGD.
+
+EAs and populations are dispersed conditional on the "known number" of EAs, households, and target population at the admin 1 level using multilevel multinomial sampling, first sampling the EAs, then distributing households among the EAs, then the target population among the households. Any areal level below the 'areas' we call 'subareas'. For instance, the 'areas' might be Admin1 if that is the smallest level at which the number of EAs, households, and people is known, and the 'subareas' might be Admin2. The multilevel multinomial sampling may be stratified by urban/rural within the areas if the number of EAs, households, and people is also approximately known at that level.
+
+## Each region has it's own probability of selection
+
+### 2 outcomes (dead or alive): Binomial model
+
+WRITE OUT THE MODEL
+
+## Each region has it's own probability of selection
+
+Simulate a population
+
+```{r}
+# simulate population similar to kenya
+data(kenyaMaps)
+data(kenyaPopulationData)
+pixelCoords <- cbind(popMatKenya$east, popMatKenya$north)
+SPDEArgs <- list(coords=pixelCoords, nsim=1, margVar=1, effRange=400, 
+                mesh=kenyaMesh, inla.seed=12L)
+uDraws <- do.call("simSPDE", SPDEArgs)
+
+# simulate the enumeration areas
+sigmaEpsilonDraws <- 0.1
+
+# simulate EA and pixel level populations given the risk 
+# simulated by the SPDE model
+pixelPop <- simPopPixel(uDraws=uDraws, sigmaEpsilonDraws=sigmaEpsilonDraws, 
+                       easpa=easpaKenyaNeonatal, 
+                       popMat=popMatKenya, targetPopMat=popMatKenyaNeonatal, 
+                       stratifyByUrban=TRUE, 
+                       doFineScaleRisk=TRUE, poppsub=poppsubKenya, 
+                       subareaLevel=TRUE, min1PerSubarea=TRUE, 
+                       returnEAinfo=TRUE)
+
+# get data with row for each birth
+eadatlong <- as.data.frame(lapply(pixelPop$eaDatList[[1]], rep, eadat$N))
+eadatlong$reg <- as.numeric(eadatlong$area)
+eadatlong <- eadatlong[order(eadatlong$reg),]
+
+# apply model to get deaths
+set.seed(128)
+nageg <- 6
+nreg <- length(unique(eadatlong$reg))
+n <- nrow(eadatlong)
+agegroup.probs <- c(0.04, 0.004, rep(0.001, nageg - 2))
+alpha_vec <- logitlink(agegroup.probs)
+
+# gamma <- rnorm(nreg, 0, 0.5)
+gamma <- rep(0, nreg)
+
+# get probs of death
+probs <- data.table(reg = rep(1:nreg, each = nageg),
+                    ageg = rep(1:nageg, nreg),
+                    alpha = rep(alpha_vec, nreg),
+                    gamma = rep(gamma, each = nageg))
+probs %<>% mutate(eta = alpha + gamma) %>%
+    mutate(prob = expit(eta))
+
+# multinomial draws
+ns <- c(1, 11, 12, 12, 12, 12) # number of months for each age group
+monthly.agegroups <- rep(1:6, times = ns)
+agegroup.ref <- c(monthly.agegroups, nageg + 1)
+outcome.month <- vector(mode = "list", length = nreg)
+outcome.death <- vector(mode = "list", length = nreg)
+for (i in 1:nreg) {
+    cat(paste0("region: ", i, "\n"))
+    tmp <- eadatlong %>% filter(reg == i)
+    tmp_probs <- probs %>% 
+        filter(reg == i)
+    tmp_probs$nmonths <- rep(ns, ncause)
+    mult_probs <- rep(tmp_probs$prob, times = tmp_probs$nmonths)
+    mult_probs <- c(mult_probs, 1 - sum(mult_probs))
+    y.draws <- rmultinom(nrow(tmp), 1, mult_probs)
+    y.multinom.category <- apply(y.draws, 2, function(x) {which(x == 1)})
+    outcome.month[[i]] <- ifelse(y.multinom.category %in% 1:sum(ns), 
+                            y.multinom.category, 
+                            y.multinom.category - sum(ns))
+    outcome.cause[[i]] <- multinom.cause.ref[y.multinom.category]
+}
+eadatlong$out.month <- do.call(c, outcome.month)
+eadatlong$out.cause <- do.call(c, outcome.cause)
+
+# true 5q0^c
+outcome.5q0.c <- prop.table(table(eadatlong$out.cause))[1:ncause]
+
+# different prob weights for each region
+avg_prob_samp <- 0.001
+reg.p.weight <- expit(rnorm(nreg, logitlink(avg_prob_samp), 0.1))
+eadatlong$pweight <- reg.p.weight[eadatlong$reg]
+```
+
+Simulate a DHS, format data, run model
+
+```{r}
+# function to calculate 5q0^c from multinomial model
+get_5q0 <- function(beta, n) {
+    ## For testing
+    # beta <- coef(mult.mod)
+    # n <- c(1, 11, 12, 12, 12, 12)
+    
+    betas_of_interest <- beta[seq(1,length(beta), by = 2)]
+    betas_other <- beta[seq(2,length(beta), by = 2)]
+    
+    gamma_j <- (1 + exp(betas_of_interest) + exp(betas_other))^-1
+    sum_nj_of_gammajs <- rep(0, length(n))
+    for (j in 1:length(n)) {
+        for (s in 1:n[j]) {
+            sum_nj_of_gammajs[j] <- sum_nj_of_gammajs[j] + gamma_j[j]^s
+        }
+    }
+    
+    phi_of_interest <- sum(exp(betas_of_interest) * sum_nj_of_gammajs)
+    phi_other <- sum(exp(betas_other) * sum_nj_of_gammajs)
+    
+    return(c(phi_of_interest, phi_other))
+}
+
+# sim setup and storage of results
+set.seed(2008)
+nsim <- 100
+q5.res <- matrix(NA, nrow = nsim, ncol = ncause)
+coverage.res <- matrix(NA, nrow = nsim, ncol = ncause)
+
+# simulate data
+for (s in 1:nsim) {
+    
+    # testing
+    # s <- 1
+    
+    cat(paste0("Starting sim ", s, "... "))
+    
+    # Sample births
+    ps <- runif(nrow(eadatlong), 0, 1)
+    sampdat <- eadatlong[ps < eadatlong$pweight,]
+
+    # simulate data
+    cat(paste0("formatting data... "))
+    
+    # expand to monthly data
+    sampdat$id <- 1:nrow(sampdat)
+    sampdat$out.month[sampdat$out.month == 61] <- 60
+    finalmonths <- sampdat$out.month
+    sampdat.long <- sampdat[rep(1:nrow(sampdat), times = sampdat$out.month),]
+    month.long <- unlist(lapply(sampdat$out.month, function(x) {1:x}))
+    sampdat.long$month <- month.long
+    agegroup.month.ref <- rep(1:nageg, times = ns)
+    sampdat.long$ageg <- agegroup.month.ref[sampdat.long$month]
+    sampdat.long$cause1 <- ifelse(sampdat.long$month == sampdat.long$out.month & 
+                                      sampdat.long$out.cause == 1,
+                                  1, 0)
+    sampdat.long$cause_other <- ifelse(sampdat.long$month == sampdat.long$out.month & 
+                                           sampdat.long$out.cause == 2,
+                                       1, 0)
+    sampdat.long$alive <- ifelse(sampdat.long$cause1 == 0 & 
+                                       sampdat.long$cause_other == 0,
+                                 1, 0)
+    
+    # compactify
+    sampdat.comp <- sampdat.long[, c("reg", "pweight", "ageg",
+                                     "alive", "cause1", "cause_other")]
+    sampdat.comp$total <- 1
+    formula <- as.formula(".~ reg + ageg + pweight")
+    sampdat.comp <- aggregate(formula, data = sampdat.comp, FUN = sum, drop = TRUE)
+    # table(sampdat.comp$age)
+    
+    # fit model
+    cat(paste0("fitting model stage 1 (survey multinomial) model... "))
+    
+    # survey design
+    my.svydesign <- survey::svydesign(ids = ~ reg, weights = ~ pweight, 
+                                      data = sampdat.comp)
+    
+    ## multinomial model
+    mult.mod <- svy_vglm(cbind(cause1, cause_other, alive) ~ -1 + factor(ageg), 
+                         family = multinomial, 
+                         design = my.svydesign)
+    
+    # extract betas and sigma-hat to use in calculating 5q0 and its variance
+    betas <- coef(mult.mod)
+    V <- stats::vcov(mult.mod)
+    
+    #  simulate betas
+    betasim <- rmvnorm(10000, mean = betas, sigma = V)
+    q5.sim <- t(apply(betasim, 1, function(x) get_5q0(x, ns)))
+    bounds <- apply(q5.sim, 2, quantile, c(0.025, 0.975))
+    
+    q5.res[s, ] <- get_5q0(betas, ns)
+    coverage.res[s, ] <- c(bounds[1, 1] < outcome.5q0.c[1] & bounds[2, 1] > outcome.5q0.c[1],
+                           bounds[1, 2] < outcome.5q0.c[2] & bounds[2, 2] > outcome.5q0.c[2])
+    
+    cat(paste0("done.\n"))
+}
+
+# results
+apply(coverage.res, 2, mean)
+```
+
+
+### 3 outcomes (cause 1, other causes, alive): Multinomial model
+
+Simulate a population
+
+```{r}
+# simulate population similar to kenya
+data(kenyaMaps)
+data(kenyaPopulationData)
+pixelCoords <- cbind(popMatKenya$east, popMatKenya$north)
+SPDEArgs <- list(coords=pixelCoords, nsim=1, margVar=1, effRange=400, 
+                mesh=kenyaMesh, inla.seed=12L)
+uDraws <- do.call("simSPDE", SPDEArgs)
+
+# simulate the enumeration areas
+sigmaEpsilonDraws <- 0.1
+
+# simulate EA and pixel level populations given the risk 
+# simulated by the SPDE model
+pixelPop <- simPopPixel(uDraws=uDraws, sigmaEpsilonDraws=sigmaEpsilonDraws, 
+                       easpa=easpaKenyaNeonatal, 
+                       popMat=popMatKenya, targetPopMat=popMatKenyaNeonatal, 
+                       stratifyByUrban=TRUE, 
+                       doFineScaleRisk=TRUE, poppsub=poppsubKenya, 
+                       subareaLevel=TRUE, min1PerSubarea=TRUE, 
+                       returnEAinfo=TRUE)
+
+# get data with row for each birth
+eadatlong <- as.data.frame(lapply(pixelPop$eaDatList[[1]], rep, eadat$N))
+eadatlong$reg <- as.numeric(eadatlong$area)
+eadatlong <- eadatlong[order(eadatlong$reg),]
+
+# apply model to get deaths
+set.seed(128)
+nageg <- 6
+ncause <- 2
+nreg <- length(unique(eadatlong$reg))
+n <- nrow(eadatlong)
+c.frac <- 0.3 # cause fraction for the cause of interest
+agegroup.probs <- c(0.04, 0.004, rep(0.001, nageg - 2))
+alpha <- matrix(c(logitlink(agegroup.probs * c.frac), logitlink(agegroup.probs * (1 - c.frac))),
+                nrow = nageg, ncol = ncause)
+alpha_vec <- as.vector(alpha)
+
+# gamma <- rnorm(nreg, 0, 0.5)
+gamma <- rep(0, nreg)
+
+# get probs of death
+probs <- data.table(reg = rep(1:nreg, each = nageg*ncause),
+                    ageg = rep(1:nageg, nreg*ncause),
+                    cause = rep(rep(1:ncause, each = nageg), nreg),
+                    alpha = rep(alpha_vec, nreg),
+                    gamma = rep(gamma, each = nageg*ncause))
+probs %<>% mutate(eta = alpha + gamma) %>%
+    group_by(cause, reg) %>%
+    mutate(prob = exp(eta)/(1 + sum(exp(eta))))
+
+# multinomial draws
+ns <- c(1, 11, 12, 12, 12, 12) # number of months for each age group
+monthly.agegroups <- rep(1:6, times = ns)
+multinom.agegroup.ref <- c(rep(monthly.agegroups, ncause), nageg + 1)
+multinom.cause.ref <- c(rep(1:ncause, each = sum(ns)), ncause + 1)
+outcome.month <- vector(mode = "list", length = nreg)
+outcome.cause <- vector(mode = "list", length = nreg)
+for (i in 1:nreg) {
+    cat(paste0("region: ", i, "\n"))
+    tmp <- eadatlong %>% filter(reg == i)
+    tmp_probs <- probs %>% 
+        filter(reg == i)
+    tmp_probs$nmonths <- rep(ns, ncause)
+    mult_probs <- rep(tmp_probs$prob, times = tmp_probs$nmonths)
+    mult_probs <- c(mult_probs, 1 - sum(mult_probs))
+    y.draws <- rmultinom(nrow(tmp), 1, mult_probs)
+    y.multinom.category <- apply(y.draws, 2, function(x) {which(x == 1)})
+    outcome.month[[i]] <- ifelse(y.multinom.category %in% 1:sum(ns), 
+                            y.multinom.category, 
+                            y.multinom.category - sum(ns))
+    outcome.cause[[i]] <- multinom.cause.ref[y.multinom.category]
+}
+eadatlong$out.month <- do.call(c, outcome.month)
+eadatlong$out.cause <- do.call(c, outcome.cause)
+
+# true 5q0^c
+outcome.5q0.c <- prop.table(table(eadatlong$out.cause))[1:ncause]
+
+# different prob weights for each region
+avg_prob_samp <- 0.001
+reg.p.weight <- expit(rnorm(nreg, logitlink(avg_prob_samp), 0.1))
+eadatlong$pweight <- reg.p.weight[eadatlong$reg]
+```
+
+Simulate a DHS, format data, run model
+
+```{r}
+# function to calculate 5q0^c from multinomial model
+get_5q0 <- function(beta, n) {
+    ## For testing
+    # beta <- coef(mult.mod)
+    # n <- c(1, 11, 12, 12, 12, 12)
+    
+    betas_of_interest <- beta[seq(1,length(beta), by = 2)]
+    betas_other <- beta[seq(2,length(beta), by = 2)]
+    
+    gamma_j <- (1 + exp(betas_of_interest) + exp(betas_other))^-1
+    sum_nj_of_gammajs <- rep(0, length(n))
+    for (j in 1:length(n)) {
+        for (s in 1:n[j]) {
+            sum_nj_of_gammajs[j] <- sum_nj_of_gammajs[j] + gamma_j[j]^s
+        }
+    }
+    
+    phi_of_interest <- sum(exp(betas_of_interest) * sum_nj_of_gammajs)
+    phi_other <- sum(exp(betas_other) * sum_nj_of_gammajs)
+    
+    return(c(phi_of_interest, phi_other))
+}
+
+# sim setup and storage of results
+set.seed(2008)
+nsim <- 100
+q5.res <- matrix(NA, nrow = nsim, ncol = ncause)
+coverage.res <- matrix(NA, nrow = nsim, ncol = ncause)
+
+# simulate data
+for (s in 1:nsim) {
+    
+    # testing
+    # s <- 1
+    
+    cat(paste0("Starting sim ", s, "... "))
+    
+    # Sample births
+    ps <- runif(nrow(eadatlong), 0, 1)
+    sampdat <- eadatlong[ps < eadatlong$pweight,]
+
+    # simulate data
+    cat(paste0("formatting data... "))
+    
+    # expand to monthly data
+    sampdat$id <- 1:nrow(sampdat)
+    sampdat$out.month[sampdat$out.month == 61] <- 60
+    finalmonths <- sampdat$out.month
+    sampdat.long <- sampdat[rep(1:nrow(sampdat), times = sampdat$out.month),]
+    month.long <- unlist(lapply(sampdat$out.month, function(x) {1:x}))
+    sampdat.long$month <- month.long
+    agegroup.month.ref <- rep(1:nageg, times = ns)
+    sampdat.long$ageg <- agegroup.month.ref[sampdat.long$month]
+    sampdat.long$cause1 <- ifelse(sampdat.long$month == sampdat.long$out.month & 
+                                      sampdat.long$out.cause == 1,
+                                  1, 0)
+    sampdat.long$cause_other <- ifelse(sampdat.long$month == sampdat.long$out.month & 
+                                           sampdat.long$out.cause == 2,
+                                       1, 0)
+    sampdat.long$alive <- ifelse(sampdat.long$cause1 == 0 & 
+                                       sampdat.long$cause_other == 0,
+                                 1, 0)
+    
+    # compactify
+    sampdat.comp <- sampdat.long[, c("reg", "pweight", "ageg",
+                                     "alive", "cause1", "cause_other")]
+    sampdat.comp$total <- 1
+    formula <- as.formula(".~ reg + ageg + pweight")
+    sampdat.comp <- aggregate(formula, data = sampdat.comp, FUN = sum, drop = TRUE)
+    # table(sampdat.comp$age)
+    
+    # fit model
+    cat(paste0("fitting model stage 1 (survey multinomial) model... "))
+    
+    # survey design
+    my.svydesign <- survey::svydesign(ids = ~ reg, weights = ~ pweight, 
+                                      data = sampdat.comp)
+    
+    ## multinomial model
+    mult.mod <- svy_vglm(cbind(cause1, cause_other, alive) ~ -1 + factor(ageg), 
+                         family = multinomial, 
+                         design = my.svydesign)
+    
+    # extract betas and sigma-hat to use in calculating 5q0 and its variance
+    betas <- coef(mult.mod)
+    V <- stats::vcov(mult.mod)
+    
+    #  simulate betas
+    betasim <- rmvnorm(10000, mean = betas, sigma = V)
+    q5.sim <- t(apply(betasim, 1, function(x) get_5q0(x, ns)))
+    bounds <- apply(q5.sim, 2, quantile, c(0.025, 0.975))
+    
+    q5.res[s, ] <- get_5q0(betas, ns)
+    coverage.res[s, ] <- c(bounds[1, 1] < outcome.5q0.c[1] & bounds[2, 1] > outcome.5q0.c[1],
+                           bounds[1, 2] < outcome.5q0.c[2] & bounds[2, 2] > outcome.5q0.c[2])
+    
+    cat(paste0("done.\n"))
+}
+
+# results
+apply(coverage.res, 2, mean)
+```
+
+## DHS-like survey: stratified (by urban-rural) cluster sampling

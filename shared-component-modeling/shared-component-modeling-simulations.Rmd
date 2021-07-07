@@ -1,0 +1,777 @@
+---
+title: "BGD modeling simulations"
+author: "Austin Schumacher"
+date: "`r Sys.Date()`"
+output: 
+    pdf_document:
+        includes: 
+            in_header: "/Users/austin/Desktop/work/presentation_publication_resources/mycommands.tex"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, cache = FALSE)
+rm(list = ls())
+
+## Libraries ####
+library(SUMMER)
+# help(package = "SUMMER", help_type = "html")
+library(classInt)
+library(RColorBrewer)
+library(dplyr)
+library(tidyr)
+library(rgdal)
+library(scales)
+library(survey)
+library(tidyverse)
+library(spdep)
+library(INLA)
+library(knitr)
+
+set.seed(858)
+```
+
+# Continuous outcome
+
+## IID (nonspatial)
+
+### No shared components
+
+We will start by simulating continuous outcomes for 2 "causes" with the following IID model:
+
+\eq{
+    y_{ic} &= \beta_c + \gamma_{i} + \epsilon_{ic} \\
+    \epsilon_{ic} &\overset{iid}{\sim} N(0, \sigma_{\epsilon}^2) \\
+    \gamma_{i} &\overset{iid}{\sim} N(0, \sigma_{\gamma}^2)
+}
+
+First, we simulate data for $i = 1, \dots, 8$ regions and $c = 1, \dots, 2$ causes, with
+
+- $\bm\beta = (1,2)$
+- $\sigma_{\epsilon}^2 = 0.1$
+- $\sigma_{\gamma}^2 = 0.5$
+
+We fit a correctly specified model with
+
+- flat priors for each $\beta_c$
+- Gamma(1, 0.00005) prior on $1 / \sigma^2_{\epsilon}$
+- PC prior for $\sigma_{\gamma}$ such that there is a 1\% chance $\sigma_{\gamma} > 1$
+
+```{r}
+# parameters
+nreg <- 8
+ncause <- 2
+beta <- c(1,2)
+gamma <- rnorm(nreg, 0, 0.5)
+gamma1 <- rnorm(nreg, 0, 0.5)
+gamma2 <- rnorm(nreg, 0, 0.5)
+sigma <- 0.1
+
+# simulate data
+# nsims <- 10
+# for (i in 1:nsims) {
+#     
+# }
+y1 <- rnorm(nreg, beta[1] + gamma, sigma)
+y2 <- rnorm(nreg, beta[2] + gamma, sigma)
+# y1 <- rnorm(nreg, beta[1] + gamma1, sigma^2)
+# y2 <- rnorm(nreg, beta[2] + gamma2, sigma^2)
+y <- c(y1, y2)
+cause <- rep(c(1,2), each = nreg)
+region <-  rep(1:nreg, 2)
+region1 <- c(1:nreg, rep(NA, nreg))
+region2 <- c(rep(NA, nreg), 1:nreg)
+
+# priors
+fe.prec <- list(prec.intercept = 0,
+                prec = 0)
+iid_prec_prior <- list(prec = list(prior = "pc.prec", param = c(1, 0.01)))
+
+# model formula
+m.form <- y ~ -1 + factor(cause) + f(region, model = "iid", hyper = iid_prec_prior)
+# m.form <- y ~ -1 + factor(cause) + 
+#     f(region1, model = "iid", hyper = iid_prec_prior) +
+#     f(region2, model = "iid", hyper = iid_prec_prior)
+
+# fit model
+mod1 <- inla(m.form, 
+             data = data.frame(y = y, cause = cause, region = region, 
+                               region1 = region1, region2 = region2),
+             family = "gaussian",
+             control.fixed = fe.prec,
+             control.predictor=list(compute=TRUE),
+             control.compute=list(config = TRUE))
+fe.res <- mod1$summary.fixed
+re.res <- mod1$summary.random
+hyperpar.res <- mod1$summary.hyperpar
+fitted.res <- mod1$summary.fitted.values
+
+res.table <- data.frame(parameter = c("$\\beta_1$", "$\\beta_2$", 
+                         "$\\sigma_{\\epsilon}$", "$\\sigma_{\\gamma}$"),
+                        med = c(fe.res$`0.5quant`, 1/(hyperpar.res$`0.5quant`)^0.5),
+                        L95 = c(fe.res$`0.025quant`, 1/(hyperpar.res$`0.975quant`)^0.5),
+                        U95 = c(fe.res$`0.975quant`, 1/(hyperpar.res$`0.025quant`)^0.5))
+kable(res.table)
+
+plot(fitted.res$`0.5quant` ~ y, main = "Comparison of fitted values with 95% UI",
+     xlab = "observed", ylab = "fitted",
+     ylim = range(c(fitted.res$`0.025quant`, fitted.res$`0.975quant`)))
+segments(y, fitted.res$`0.025quant`, y, fitted.res$`0.975quant`)
+abline(0,1, col = "red")
+
+plot(re.res$region$`0.5quant` ~ gamma, main = "Comparison of REs with 95% UI",
+     xlab = "observed", ylab = "fitted", 
+     ylim = range(c(re.res$region$`0.025quant`, re.res$region$`0.975quant`)))
+segments(gamma, re.res$region$`0.025quant`, gamma, re.res$region$`0.975quant`)
+abline(0,1, col = "red")
+```
+
+Next, we will move on to modeling 3 "causes":
+
+TODO
+
+### Shared components
+
+We will start by simulating a continuous outcome for 2 "causes" with the following shared component (coregionalization) IID model:
+
+\eq{
+    y_{i1} &= \beta_1 + \gamma_{i1} + \epsilon_{i1} \\
+    y_{i2} &= \beta_2 + \lambda_1\gamma_{i1} + \gamma_{i2} + \epsilon_{i2} \\
+    \epsilon_{ic} &\overset{iid}{\sim} N(0, \sigma_{\epsilon}^2) \\
+    \gamma_{i1} &\overset{iid}{\sim} N(0, \sigma_{\gamma}^2) \\
+    \gamma_{i2} &\overset{iid}{\sim} N(0, \sigma_{\gamma}^2)
+}
+
+First, we simulate data for $i = 1, \dots, n$ regions ($n \in \{ 8, 500\}$) and $c = 1, \dots, 2$ causes, with
+
+- $\bm\beta = (1,2)$
+- $\sigma_{\epsilon} = 0.01$
+- $\sigma_{\gamma} = 0.5$
+- $\lambda_1 = 0.5$ 
+
+We fit a correctly specified model with
+
+- flat priors for each $\beta_c$
+- fixed (known) $\sigma_{\epsilon}$ correctly set to 0.01
+- PC prior for $\sigma_{\gamma}$ such that there is a 1\% chance $\sigma_{\gamma} > 1$
+- N(0,1) prior on $\lambda$ 
+  
+```{r}
+# simulate data
+nregs <- c(8, 500)
+sigmas <- c(0.01, 0.1)
+for (ri in 1:length(nregs)) {
+  nreg <- nregs[ri]
+  for (si in 1:length(sigmas)) {
+    sigma <- sigmas[si]
+    
+    # parameters
+    ncause <- 2
+    beta <- c(1,2)
+    gamma1 <- rnorm(nreg, 0, 0.5^2)
+    gamma2 <- rnorm(nreg, 0, 0.5^2)
+    lambda <- 0.5
+  
+    y1 <- rnorm(nreg, beta[1] + gamma1, sigma)
+    y2 <- rnorm(nreg, beta[2] + (gamma1 * lambda) + gamma2, sigma)
+    y <- c(y1, y2)
+    cause <- rep(c(1,2), each = nreg)
+    region <-  rep(1:nreg, 2)
+    region1 <- c(1:nreg, rep(NA, nreg))
+    region2 <- c(rep(NA, nreg), 1:nreg)
+    region12 <- region2
+    
+    # priors
+    fe.prec <- list(prec.intercept = 0,
+                    prec = 0)
+    iid_prec_prior <- list(prec = list(prior = "pc.prec", param = c(1, 0.01)))
+    hyper_lambda <- list(theta = list(prior = 'normal', param = c(0, 1)))
+    
+    # model formula
+    m.form <- y ~ -1 + factor(cause) + 
+        f(region1, model = "iid", hyper = iid_prec_prior) +
+        f(region2, model = "iid", hyper = iid_prec_prior) +
+        f(region12, copy = "region1", fixed = FALSE, hyper = hyper_lambda)
+    
+    # fit model
+    mod1 <- inla(m.form, 
+                 data = data.frame(y = y, cause = cause, 
+                                   region1 = region1,
+                                   region2 = region2,
+                                   region12 = region12,
+                                   prec_loggaussian = 1/sigma^2),
+                 family = "gaussian",
+                 control.fixed = fe.prec,
+                 control.predictor=list(compute=TRUE),
+                 control.compute=list(config = TRUE),
+                 control.family = list(hyper = list(prec = list(initial = log(1), fixed=TRUE))),
+                 scale = prec_loggaussian)
+    
+    # results
+    fe.res <- mod1$summary.fixed
+    re.res <- mod1$summary.random
+    hyperpar.res <- mod1$summary.hyperpar
+    fitted.res <- mod1$summary.fitted.values
+    
+    res.table <- data.frame(parameter = c("$\\beta_1$", "$\\beta_2$", 
+                             # "$\\sigma_{\\epsilon}$", 
+                             "$\\sigma_{\\gamma_1}$", "$\\sigma_{\\gamma_2}$",
+                             "$\\lambda$"),
+                            med = c(fe.res$`0.5quant`, 1/(hyperpar.res$`0.5quant`[1:2])^0.5, hyperpar.res$`0.5quant`[3]),
+                            L95 = c(fe.res$`0.025quant`, 1/(hyperpar.res$`0.975quant`[1:2])^0.5, hyperpar.res$`0.025quant`[3]),
+                            U95 = c(fe.res$`0.975quant`, 1/(hyperpar.res$`0.025quant`[1:2]^0.5), hyperpar.res$`0.975quant`[3]))
+    kable(res.table, caption = paste0(nreg, " regions; sigma_epsilon = ", sigma))
+    
+    plot(fitted.res$`0.5quant` ~ y, main = paste0(nreg, " regions: fitted values with 95% UI vs observed"),
+         xlab = "observed", ylab = "fitted",
+         ylim = range(c(fitted.res$`0.025quant`, fitted.res$`0.975quant`)))
+    segments(y, fitted.res$`0.025quant`, y, fitted.res$`0.975quant`)
+    abline(0,1, col = "red")
+    
+    plot(re.res$region1$`0.5quant` ~ gamma1, main = paste0(nreg, " regions: shared RE values with 95% UI vs truth"),
+         xlab = "observed", ylab = "fitted", 
+         ylim = range(c(re.res$region1$`0.025quant`, re.res$region1$`0.975quant`)))
+    segments(gamma1, re.res$region1$`0.025quant`, gamma1, re.res$region1$`0.975quant`)
+    abline(0,1, col = "red")
+    
+    plot(re.res$region2$`0.5quant` ~ gamma2, main = paste0(nreg, " regions: nonshared RE values with 95% UI vs truth"),
+         xlab = "observed", ylab = "fitted", 
+         ylim = range(c(re.res$region2$`0.025quant`, re.res$region2$`0.975quant`)))
+    segments(gamma2, re.res$region2$`0.025quant`, gamma2, re.res$region2$`0.975quant`)
+    abline(0,1, col = "red")
+  }
+}
+
+```
+
+Next, we will model 5 "causes" with a similar model.
+
+## ICAR (spatial)
+
+### No shared components
+
+We will start by simulating continuous outcomes for 2 "causes" with the following BYM spatial model:
+
+\eq{
+    y_{ic} &= \beta_c + s_{i} + e_i + \epsilon_{ic} \\
+    \epsilon_{ic} &\overset{IID}{\sim} N(0, \sigma^2_{\epsilon})\\
+    \bm{s} &\sim ICAR(\sigma_{s}^2) \\
+    e_i &\overset{IID}{\sim} N(0, \sigma^2_e) 
+}
+
+First, we simulate data for $i = 1, \dots, 8$ regions and $c = 1, \dots, 2$ causes, with
+
+- $\bm\beta = (1,2)$
+- $\sigma_{\epsilon}^2 = 0.1$
+- $\sigma_{e}^2 = 0.5$
+- marginal generalized variance the $s_i$ equal to 1
+
+We fit a correctly specified model with
+
+- flat priors for each $\beta_c$
+- Gamma(1, 0.00005) prior on $1 / \sigma^2_{\epsilon}$
+- BYM2 specification of the ICAR and IID random effects
+  - PC prior on the total standard deviation such that there is a 1\% chance it is bigger than 1
+  - PC prior on the proportion of the variance that is spatial such that there is a 50\% chance it is bigger than 0.5
+
+```{r}
+## load bgd shape files
+poly.adm0 <- readOGR(dsn = "/Users/austin/Dropbox/dissertation_2/survey-csmf/data/shapefiles/bgd_adm_bbs_20201113_SHP",
+                     layer = "bgd_admbnda_adm0_bbs_20201113")
+poly.adm0$region <- "All"
+poly.adm1 <- readOGR(dsn = "/Users/austin/Dropbox/dissertation_2/survey-csmf/data/shapefiles/bgd_adm_bbs_20201113_SHP",
+                     layer = "bgd_admbnda_adm1_bbs_20201113")
+poly.adm1$region <- tolower(poly.adm1$ADM1_EN)
+
+# get adjacency matrix
+admin1.mat.raw <- poly2nb(SpatialPolygons(poly.adm1@polygons))
+admin1.mat <- nb2mat(admin1.mat.raw, style = "B")
+nb2INLA("bgd.graph", admin1.mat.raw)
+
+# parameters
+nreg <- nrow(admin1.mat)
+ncause <- 2
+beta <- 1:ncause
+sigma_epsilon <- 0.1^0.5
+sigma_e <- 0.5^.5
+sigma_s <- 1^.5
+
+# simulate data
+# nsims <- 10
+# for (i in 1:nsims) {
+#     
+# }
+e <- rnorm(nreg, 0, sigma_e)
+s <- rst(n = 1, type = "s", type.s = "ICAR", Amat = admin1.mat, scale.model = TRUE)
+y <- c()
+for (b in 1:ncause) {
+  y <- c(y, rnorm(nreg, beta[b] + e + s, sigma_epsilon))
+}
+cause <- rep(1:ncause, each = nreg)
+region <-  rep(1:nreg, ncause)
+
+# priors
+fe.prec <- list(prec.intercept = 0,
+                prec = 0)
+bym2_priors <- list(phi=list(prior="pc", param=c(0.5, 0.5), initial=1), 
+                    prec=list(prior="pc.prec", param=c(1, 0.01), initial=5))
+
+# model formula
+m.form <- y ~ -1 + factor(cause) + f(region, model = "bym2", 
+                                     graph = "bgd.graph",
+                                     scale.model = TRUE,
+                                     constr = TRUE,
+                                     hyper = bym2_priors)
+# m.form <- y ~ -1 + factor(cause) + 
+#     f(region1, model = "iid", hyper = iid_prec_prior) +
+#     f(region2, model = "iid", hyper = iid_prec_prior)
+
+# fit model
+mod1 <- inla(m.form, 
+             data = data.frame(y = y, cause = cause, region = region),
+             family = "gaussian",
+             control.fixed = fe.prec,
+             control.predictor=list(compute=TRUE),
+             control.compute=list(config = TRUE))
+
+# results
+fe.res <- mod1$summary.fixed
+re.res <- mod1$summary.random
+hyperpar.res <- mod1$summary.hyperpar
+fitted.res <- mod1$summary.fitted.values
+
+res.table <- data.frame(parameter = c("$\\beta_1$", "$\\beta_2$", 
+                         "$\\sigma_{\\epsilon}$", "$\\sigma_{T}$", "$\\phi$"),
+                        med = c(fe.res$`0.5quant`, 1/(hyperpar.res$`0.5quant`[1:2])^0.5, hyperpar.res$`0.5quant`[3]),
+                        L95 = c(fe.res$`0.025quant`, 1/(hyperpar.res$`0.975quant`[1:2])^0.5, hyperpar.res$`0.025quant`[3]),
+                        U95 = c(fe.res$`0.975quant`, 1/(hyperpar.res$`0.025quant`[1:2])^0.5, hyperpar.res$`0.975quant`[3]))
+kable(res.table)
+
+plot(fitted.res$`0.5quant` ~ y, main = "Comparison of fitted values with 95% UI",
+     xlab = "observed", ylab = "fitted",
+     ylim = range(c(fitted.res$`0.025quant`, fitted.res$`0.975quant`)))
+segments(y, fitted.res$`0.025quant`, y, fitted.res$`0.975quant`)
+abline(0,1, col = "red")
+
+# plot(re.res$region$`0.5quant` ~ gamma, main = "Comparison of REs with 95% UI",
+#      xlab = "observed", ylab = "fitted", 
+#      ylim = range(c(re.res$region$`0.025quant`, re.res$region$`0.975quant`)))
+# segments(gamma, re.res$region$`0.025quant`, gamma, re.res$region$`0.975quant`)
+# abline(0,1, col = "red")
+```
+
+### Shared components
+
+We will start by simulating continuous outcomes for 2 "causes" with the following shared component BYM spatial model:
+
+\eq{
+    y_{i1} &= \beta_1 + s_{i1} + e_{i1} + \epsilon_{i1} \\
+    y_{i2} &= \beta_2 + \lambda_1 (s_{i1} + e_{i1}) + s_{i2} + e_i + \epsilon_{i2} \\
+    \epsilon_{ic} &\overset{IID}{\sim} N(0, \sigma^2_{\epsilon})\\
+    \bm{s_c} &\sim ICAR(\sigma_{s}^2) \\
+    e_i &\overset{IID}{\sim} N(0, \sigma^2_e) 
+}
+
+First, we simulate data for $i = 1, \dots, 8$ regions and $c = 1, \dots, 2$ causes, with
+
+- $\bm\beta = (1,2)$
+- $\sigma_{\epsilon}^2 = 0.01$
+- $\sigma_{e}^2 = 0.1$
+- marginal generalized variance the $s_i$ equal to 1
+- $\lambda_1 = 0.5$
+
+We fit a correctly specified model with
+
+- flat priors for each $\beta_c$
+- Gamma(1, 0.00005) prior on $1 / \sigma^2_{\epsilon}$
+- BYM2 specification of the ICAR and IID random effects
+  - PC prior on the total standard deviation such that there is a 1\% chance it is bigger than 2
+  - PC prior on the proportion of the variance that is spatial such that there is a 50\% chance it is bigger than 0.5
+- N(0, 1) prior on $\lambda$
+
+```{r}
+# parameters
+nreg <- nrow(admin1.mat)
+ncause <- 2
+beta <- 1:ncause
+sigma_epsilon <- 0.01^0.5
+sigma_e <- 0.1^.5
+lambda <- 0.5
+
+# simulate data
+# nsims <- 10
+# for (i in 1:nsims) {
+#     
+# }
+e <- vector(mode = "list", length = ncause)
+s <- vector(mode = "list", length = ncause)
+epsilon <- vector(mode = "list", length = ncause)
+y <- vector(mode = "list", length = ncause)
+region <- vector(mode = "list", length = ncause)
+for (i in 1:ncause) {
+  e[[i]] <- rnorm(nreg, 0, sigma_e)
+  s[[i]] <- rst(n = 1, type = "s", type.s = "ICAR", Amat = admin1.mat, scale.model = TRUE)
+  epsilon[[i]] <- rnorm(nreg, 0, sigma_epsilon)
+  region[[i]] <- c(rep(rep(NA, nreg), i - 1), 1:nreg, rep(rep(NA, nreg), ncause - i))
+}
+
+cause <- rep(1:ncause, each = nreg)
+
+if (ncause == 2) {
+  regionint <- c(rep(NA, nreg), 1:nreg)
+  y[[1]] <- beta[1] + s[[1]] + e[[1]] + epsilon[[1]]
+  y[[2]] <- beta[2] + lambda * (s[[1]] + e[[1]]) + s[[2]] + e[[2]] + epsilon[[2]]
+} else {
+  stop("this number of causes not yet implemented")
+}
+
+# priors
+fe.prec <- list(prec.intercept = 0,
+                prec = 0)
+bym2_priors <- list(phi=list(prior="pc", param=c(0.5, 0.5), initial=1), 
+                    prec=list(prior="pc.prec", param=c(2, 0.01), initial=5))
+hyper_lambda <- list(theta = list(prior = 'normal', param = c(0, 1)))
+
+if (ncause == 2) {
+  # model formula
+  m.form <- y ~ -1 + factor(cause) + 
+      f(region1, model = "bym2", 
+        graph = "bgd.graph",
+        scale.model = TRUE,
+        constr = TRUE,
+        hyper = bym2_priors) +
+      f(region2, model = "bym2", 
+        graph = "bgd.graph",
+        scale.model = TRUE,
+        constr = TRUE,
+        hyper = bym2_priors) +
+      f(region12, copy = "region1", 
+        fixed = FALSE, hyper = hyper_lambda)
+  
+  # fit model
+  mod1 <- inla(m.form, 
+               data = data.frame(y = do.call(c, y), cause = cause, 
+                                 region1 = region[[1]],
+                                 region2 = region[[2]],
+                                 region12 = regionint,
+                                 prec_loggaussian = sigma_epsilon),
+               family = "gaussian",
+               control.fixed = fe.prec,
+               control.predictor=list(compute=TRUE),
+               control.compute=list(config = TRUE),
+               control.family = list(hyper = list(prec = list(initial = log(1), fixed=TRUE))),
+               scale = prec_loggaussian)
+} else {
+  stop("this number of causes not yet implemented")
+}
+
+# results
+fe.res <- mod1$summary.fixed
+re.res <- mod1$summary.random
+hyperpar.res <- mod1$summary.hyperpar
+fitted.res <- mod1$summary.fitted.values
+
+res.table <- data.frame(parameter = c("$\\beta_1$", "$\\beta_2$", 
+                         # "$\\sigma_{\\epsilon}$", 
+                         "$\\sigma_{T,1}$", "$\\phi_1$",
+                         "$\\sigma_{T,2}$", "$\\phi_2$",
+                         "$\\lambda$"),
+                        med = c(fe.res$`0.5quant`, 
+                                1/(hyperpar.res$`0.5quant`[1])^0.5, 
+                                hyperpar.res$`0.5quant`[2],
+                                1/(hyperpar.res$`0.5quant`[3])^0.5, 
+                                hyperpar.res$`0.5quant`[4:5]),
+                        L95 = c(fe.res$`0.025quant`, 
+                                1/(hyperpar.res$`0.975quant`[1])^0.5, 
+                                hyperpar.res$`0.025quant`[2],
+                                1/(hyperpar.res$`0.975quant`[3])^0.5, 
+                                hyperpar.res$`0.025quant`[4:5]),
+                        U95 = c(fe.res$`0.975quant`, 
+                                1/(hyperpar.res$`0.025quant`[1])^0.5, 
+                                hyperpar.res$`0.975quant`[2],
+                                1/(hyperpar.res$`0.025quant`[3])^0.5, 
+                                hyperpar.res$`0.975quant`[4:5]))
+kable(res.table)
+
+plot(fitted.res$`0.5quant` ~ do.call(c, y), main = "Comparison of fitted values with 95% UI",
+     xlab = "observed", ylab = "fitted",
+     ylim = range(c(fitted.res$`0.025quant`, fitted.res$`0.975quant`)))
+segments(do.call(c, y), fitted.res$`0.025quant`, do.call(c, y), fitted.res$`0.975quant`)
+abline(0,1, col = "red")
+
+# plot(re.res$region1$`0.5quant` ~ gamma1, main = "Comparison of REs with 95% UI",
+#      xlab = "observed", ylab = "fitted", 
+#      ylim = range(c(re.res$region1$`0.025quant`, re.res$region1$`0.975quant`)))
+# segments(gamma1, re.res$region1$`0.025quant`, gamma1, re.res$region1$`0.975quant`)
+# abline(0,1, col = "red")
+# 
+# plot(re.res$region2$`0.5quant` ~ gamma2, main = "Comparison of REs with 95% UI",
+#      xlab = "observed", ylab = "fitted", 
+#      ylim = range(c(re.res$region2$`0.025quant`, re.res$region2$`0.975quant`)))
+# segments(gamma2, re.res$region2$`0.025quant`, gamma2, re.res$region2$`0.975quant`)
+# abline(0,1, col = "red")
+```
+
+However, this model is sensitive to the variance parameters (for good reason). We next simulate data and fit the same model with the following parameters:
+
+- $\bm\beta = (1,2)$
+- $\sigma_{\epsilon}^2 = 0.1$
+- $\sigma_{e}^2 = 0.25$
+- marginal generalized variance the $s_i$ equal to 1
+- $\lambda_1 = 0.5$
+
+```{r}
+# parameters
+nreg <- nrow(admin1.mat)
+ncause <- 2
+beta <- 1:ncause
+sigma_epsilon <- 0.1^0.5
+sigma_e <- 0.25^.5
+lambda <- 0.5
+
+# simulate data
+# nsims <- 10
+# for (i in 1:nsims) {
+#     
+# }
+e <- vector(mode = "list", length = ncause)
+s <- vector(mode = "list", length = ncause)
+epsilon <- vector(mode = "list", length = ncause)
+y <- vector(mode = "list", length = ncause)
+region <- vector(mode = "list", length = ncause)
+for (i in 1:ncause) {
+  e[[i]] <- rnorm(nreg, 0, sigma_e)
+  s[[i]] <- rst(n = 1, type = "s", type.s = "ICAR", Amat = admin1.mat, scale.model = TRUE)
+  epsilon[[i]] <- rnorm(nreg, 0, sigma_epsilon)
+  region[[i]] <- c(rep(rep(NA, nreg), i - 1), 1:nreg, rep(rep(NA, nreg), ncause - i))
+}
+
+cause <- rep(1:ncause, each = nreg)
+
+if (ncause == 2) {
+  regionint <- c(rep(NA, nreg), 1:nreg)
+  y[[1]] <- beta[1] + s[[1]] + e[[1]] + epsilon[[1]]
+  y[[2]] <- beta[2] + lambda * (s[[1]] + e[[1]]) + s[[2]] + e[[2]] + epsilon[[2]]
+} else {
+  stop("this number of causes not yet implemented")
+}
+
+# priors
+fe.prec <- list(prec.intercept = 0,
+                prec = 0)
+bym2_priors <- list(phi=list(prior="pc", param=c(0.5, 0.5), initial=1), 
+                    prec=list(prior="pc.prec", param=c(2, 0.01), initial=5))
+hyper_lambda <- list(theta = list(prior = 'normal', param = c(0, 1)))
+
+if (ncause == 2) {
+  # model formula
+  m.form <- y ~ -1 + factor(cause) + 
+      f(region1, model = "bym2", 
+        graph = "bgd.graph",
+        scale.model = TRUE,
+        constr = TRUE,
+        hyper = bym2_priors) +
+      f(region2, model = "bym2", 
+        graph = "bgd.graph",
+        scale.model = TRUE,
+        constr = TRUE,
+        hyper = bym2_priors) +
+      f(region12, copy = "region1", 
+        fixed = FALSE, hyper = hyper_lambda)
+  
+  # fit model
+  mod1 <- inla(m.form, 
+               data = data.frame(y = do.call(c, y), cause = cause, 
+                                 region1 = region[[1]],
+                                 region2 = region[[2]],
+                                 region12 = regionint),
+               family = "gaussian",
+               control.fixed = fe.prec,
+               control.predictor=list(compute=TRUE),
+               control.compute=list(config = TRUE))
+} else {
+  stop("this number of causes not yet implemented")
+}
+
+mod1$summary.fixed
+mod1$summary.random$region1
+mod1$summary.random$region2
+mod1$summary.random$region12
+mod1$summary.hyperpar
+# mod1$summary.fitted.values$`0.5quant` - y
+plot(mod1$summary.fitted.values$`0.5quant` ~ do.call(c, y))
+abline(0,1, col = "red")
+```
+
+We will isolate the ICAR component and simulate data from the following model:
+
+\eq{
+    y_{i1} &= \beta_1 + s_{i1} + \epsilon_{i1} \\
+    y_{i2} &= \beta_2 + \lambda_1 (s_{i1}) + s_{i2} + \epsilon_{i2} \\
+    \epsilon_{ic} &\overset{IID}{\sim} N(0, \sigma^2_{\epsilon})\\
+    \bm{s_c} &\sim ICAR(\sigma_{s}^2) \\
+}
+
+First, we simulate data for $i = 1, \dots, 8$ regions and $c = 1, \dots, 2$ causes, with
+
+- $\bm\beta = (1,2)$
+- $\sigma_{\epsilon}^2 = 0.1$
+- marginal generalized variance the $s_i$ equal to 1
+- $\lambda_1 = 0.5$
+
+We fit a correctly specified model with
+
+- flat priors for each $\beta_c$
+- Gamma(1, 0.00005) prior on $1 / \sigma^2_{\epsilon}$
+- PC prior on the ICAR standard deviation such that there is a 1\% chance it is bigger than 2
+- N(0, 1) prior on $\lambda$
+
+```{r}
+# parameters
+nreg <- nrow(admin1.mat)
+ncause <- 2
+beta <- 1:ncause
+sigma_epsilon <- 0.1^0.5
+lambda <- 0.5
+
+# simulate data
+# nsims <- 10
+# for (i in 1:nsims) {
+#     
+# }
+s <- vector(mode = "list", length = ncause)
+epsilon <- vector(mode = "list", length = ncause)
+y <- vector(mode = "list", length = ncause)
+region <- vector(mode = "list", length = ncause)
+for (i in 1:ncause) {
+  s[[i]] <- rst(n = 1, type = "s", type.s = "ICAR", Amat = admin1.mat, scale.model = TRUE)
+  epsilon[[i]] <- rnorm(nreg, 0, sigma_epsilon)
+  region[[i]] <- c(rep(rep(NA, nreg), i - 1), 1:nreg, rep(rep(NA, nreg), ncause - i))
+}
+
+cause <- rep(1:ncause, each = nreg)
+
+if (ncause == 2) {
+  regionint <- c(rep(NA, nreg), 1:nreg)
+  y[[1]] <- beta[1] + s[[1]] + epsilon[[1]]
+  y[[2]] <- beta[2] + lambda * (s[[1]]) + s[[2]] + epsilon[[2]]
+} else {
+  stop("this number of causes not yet implemented")
+}
+
+# priors
+fe.prec <- list(prec.intercept = 0,
+                prec = 0)
+besag_prior <- list(prec = list(prior = "pc.prec", param=c(2, 0.01), initial=5))
+hyper_lambda <- list(theta = list(prior = 'normal', param = c(0, 1)))
+
+if (ncause == 2) {
+  # model formula
+  m.form <- y ~ -1 + factor(cause) + 
+      f(region1, model = "besag", 
+        graph = "bgd.graph",
+        scale.model = TRUE,
+        constr = TRUE,
+        hyper = besag_prior) +
+      f(region2, model = "besag", 
+        graph = "bgd.graph",
+        scale.model = TRUE,
+        constr = TRUE,
+        hyper = besag_prior) +
+      f(region12, copy = "region1", 
+        fixed = FALSE, hyper = hyper_lambda)
+  
+  # fit model
+  mod1 <- inla(m.form, 
+               data = data.frame(y = do.call(c, y), cause = cause, 
+                                 region1 = region[[1]],
+                                 region2 = region[[2]],
+                                 region12 = regionint),
+               family = "gaussian",
+               control.fixed = fe.prec,
+               control.predictor=list(compute=TRUE),
+               control.compute=list(config = TRUE))
+} else {
+  stop("this number of causes not yet implemented")
+}
+
+mod1$summary.fixed
+mod1$summary.random$region1
+mod1$summary.random$region2
+mod1$summary.random$region12
+mod1$summary.hyperpar
+# mod1$summary.fitted.values$`0.5quant` - y
+plot(mod1$summary.fitted.values$`0.5quant` ~ do.call(c, y))
+abline(0,1, col = "red")
+```
+
+<!-- # For later: multinomial modeling -->
+
+<!-- ## Data generating mechanism -->
+
+<!-- Let $i = 1, \dots, n$ index regions each with population size $N_i$, and $c = 1, \dots, C$ index causes of death. Let $\mathbf{y}_{i} = (y_{i1}, \dots, y_{iC})$ be cause-specific death counts in region $i$. We will generate data such that -->
+
+<!-- $$\mathbf{y}_{i} | \mathbf{\pi}_i \sim \mbox{Multinomial}(N_i, \mathbf{\pi}_i)$$ -->
+
+<!-- ### DGM 1 -->
+
+<!-- $$\mbox{logit}(\pi_{ic}) = \beta_c + s_i + e_i$$ -->
+
+<!-- with $beta_c$ fixed intercepts, $\mathbf{e} \overset{IID}{\sim} N(0, \sigma^2_e)$, and $\mathbf{s} \sim \mbox{ICAR}(\sigma^2_s)$. -->
+
+<!-- #### Simulated data -->
+
+<!-- ```{r} -->
+<!-- ## load bgd shape files -->
+<!-- poly.adm0 <- readOGR(dsn = "/Users/austin/Dropbox/dissertation_2/survey-csmf/data/shapefiles/bgd_adm_bbs_20201113_SHP", -->
+<!--                      layer = "bgd_admbnda_adm0_bbs_20201113") -->
+<!-- poly.adm0$region <- "All" -->
+<!-- poly.adm1 <- readOGR(dsn = "/Users/austin/Dropbox/dissertation_2/survey-csmf/data/shapefiles/bgd_adm_bbs_20201113_SHP", -->
+<!--                      layer = "bgd_admbnda_adm1_bbs_20201113") -->
+<!-- poly.adm1$region <- tolower(poly.adm1$ADM1_EN) -->
+
+<!-- # get adjacency matrix -->
+<!-- admin1.mat <- poly2nb(SpatialPolygons(poly.adm1@polygons)) -->
+<!-- admin1.mat <- nb2mat(admin1.mat, zero.policy = TRUE) -->
+
+<!-- # set parameters -->
+<!-- N <- nrow(admin1.mat) -->
+<!-- ncause <- 3 -->
+<!-- ni <- rep(1000, N) -->
+<!-- # simulate data -->
+<!-- s <- rst(n = N, type = "s", type.s = "ICAR", Amat = admin1.mat, scale.model = TRUE) -->
+<!-- e <- rnorm(N, 0, 0.1) -->
+<!-- beta <- rep(1, ncause) -->
+
+<!-- y <- rmultinom(1, ni, beta + e + s) -->
+
+<!-- poly.adm1$y <- y -->
+<!-- med.palette <- brewer.pal(n = 5, name = "Purples") -->
+<!-- med.int <- classIntervals(round(direct.admin1$logit.est, 2), -->
+<!--                           n = 5, style = 'jenks') -->
+<!-- med.col <- findColours(med.int, med.palette) -->
+<!-- par(mfrow = c(2, 4)) -->
+<!-- for(year in periods){ -->
+<!--   tmp <- poly.adm1 -->
+<!--   for (reg in tmp$region) { -->
+<!--       tmp$col[tmp$region == reg] <- med.col[direct.admin1$years == year & direct.admin1$region == reg] -->
+<!--   } -->
+<!--   plot(tmp, border = F, col = tmp$col, -->
+<!--        axes = F, main = year) -->
+<!-- } -->
+<!-- plot(NA, xlim = c(0,1), ylim = c(0,1), axes = F, xlab = "", ylab = "") -->
+<!-- legend(x = "center",inset = 0, -->
+<!--        legend = names(attr(med.col, 'table')), -->
+<!--        fill = med.palette, cex= 1, horiz = FALSE, bty = 'n') -->
+
+<!-- ``` -->
+
+<!-- ### DGM 2 (coregionalization) -->
+
+<!-- \begin{align*} -->
+<!--     \mbox{logit}(\pi_{i1}) &= \beta_1 + s_{i1} + e_i \\ -->
+<!--     \mbox{logit}(\pi_{i2}) &= \beta_1 + \lambda_1^2 s_{i1} + s_{i2}+ e_i \\ -->
+<!--     \dots & \\ -->
+<!--     \mbox{logit}(\pi_{iC}) &= \beta_1 + \lambda_1^C s_{i1} + \lambda_2^C s_{i2} + \dots + s_{iC}+ e_i -->
+<!-- \end{align*} -->
+
+

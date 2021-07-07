@@ -1,9 +1,9 @@
 {
-    "path" : "~/Desktop/india_mds_csmr/sandbox",
-    "sortOrder" : [
+    "path": "~/Desktop/survey-csmf/sandbox/stan-models",
+    "sortOrder": [
         {
-            "ascending" : true,
-            "columnIndex" : 2
+            "columnIndex": 2,
+            "ascending": true
         }
     ]
 }
