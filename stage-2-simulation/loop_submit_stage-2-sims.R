@@ -52,22 +52,22 @@ number_of_regions <- 8
 number_of_replications <- 1
 
 ## parameters
-beta1 <- 1
-beta2 <- 2
-rho_lower <- -0.2
-rho_upper <- 0.2
-sigmasq_lower <- 0.05
-sigmasq_upper <- 0.5
-sigma_gamma1 <- 1.5
-sigma_gamma2 <- 2.5
-lambda <- 0.5
+# beta1 <- 1
+# beta2 <- 2
+# rho_lower <- -0.2
+# rho_upper <- 0.2
+# sigmasq_lower <- 0.05
+# sigmasq_upper <- 0.5
+# sigma_gamma1 <- 1.5
+# sigma_gamma2 <- 2.5
+# lambda <- 0.5
 
 ## STAN options
-niter <- 10000
-nchains <- 3
-prop_warmup <- 0.5
-max_treedepth <- 15
-adapt_delta <- 0.8
+# niter <- 10000
+# nchains <- 3
+# prop_warmup <- 0.5
+# max_treedepth <- 15
+# adapt_delta <- 0.8
 
 ## Simulation number
 number_of_sims <- 5
@@ -78,87 +78,31 @@ for (a in models_to_run) {
     for (b in number_of_causes) {
         for (c in number_of_regions) {
             for (d in number_of_replications) {
-                for (e in  beta1) {
-                    for (f in  beta2) {
-                        for (g in rho_lower) {
-                            for (h in rho_upper) {
-                                for (i in  sigmasq_lower) {
-                                    for (j in  sigmasq_upper) {
-                                        for (k in  sigma_gamma1) {
-                                            for (l in  sigma_gamma2) {
-                                                for (m in  lambda) {
-                                                    for (n in  niter) {
-                                                        for (o in nchains) {
-                                                            for (p in  prop_warmup) {
-                                                                for (q in  max_treedepth) {
-                                                                    for (r in  adapt_delta) {
-                                                                        for (s in  1:number_of_sims) {
-                                                                            if (testing_script) {
-                                                                                script <- "qsub-stage-2-sims-TEST.sh"
-                                                                            } else {
-                                                                                script <- "qsub-stage-2-sims.sh" 
-                                                                            }
-                                                                            sub <- paste0("qsub -l h=\"b34|b35|b36|b37\" -pe local 4 -v ",
-                                                                                          "a=",a,
-                                                                                          ",b=",b,
-                                                                                          ",c=",c,
-                                                                                          ",d=",d,
-                                                                                          ",e=",e,
-                                                                                          ",f=",f,
-                                                                                          ",g=",g,
-                                                                                          ",h=",h,
-                                                                                          ",ii=",i,
-                                                                                          ",j=",j,
-                                                                                          ",k=",k,
-                                                                                          ",l=",l,
-                                                                                          ",m=",m,
-                                                                                          ",n=",n,
-                                                                                          ",o=",o,
-                                                                                          ",p=",p,
-                                                                                          ",q=",q,
-                                                                                          ",r=",r,
-                                                                                          ",s=",s,
-                                                                                          " -N s2sim_",
-                                                                                          a,"_",
-                                                                                          b,"_",
-                                                                                          c,"_",
-                                                                                          d,"_",
-                                                                                          e,"_",
-                                                                                          f,"_",
-                                                                                          g,"_",
-                                                                                          h,"_",
-                                                                                          i,"_",
-                                                                                          j,"_",
-                                                                                          k,"_",
-                                                                                          l,"_",
-                                                                                          m,"_",
-                                                                                          n,"_",
-                                                                                          o,"_",
-                                                                                          p,"_",
-                                                                                          q,"_",
-                                                                                          r,"_",
-                                                                                          s,"_",
-                                                                                          " ",
-                                                                                          script)
-                                                                            
-                                                                            if (testing_loop) {
-                                                                                print(sub)
-                                                                            } else {
-                                                                                system(sub)
-                                                                            }
-                                                                        }
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                for (e in  1:number_of_sims) {
+                    if (testing_script) {
+                        script <- "qsub-stage-2-sims-TEST.sh"
+                    } else {
+                        script <- "qsub-stage-2-sims.sh" 
+                    }
+                    sub <- paste0("qsub -l h=\"b34|b35|b36|b37\" -pe local 4 -v ",
+                                  "a=",a,
+                                  ",b=",b,
+                                  ",c=",c,
+                                  ",d=",d,
+                                  ",e=",e,
+                                  " -N s2sim_",
+                                  a,"_",
+                                  b,"_",
+                                  c,"_",
+                                  d,"_",
+                                  e,
+                                  " ",
+                                  script)
+                    
+                    if (testing_loop) {
+                        print(sub)
+                    } else {
+                        system(sub)
                     }
                 }
             }
