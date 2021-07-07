@@ -46,7 +46,7 @@ savedir <- paste0(root,"Dropbox/dissertation_2/survey-csmf")
 # see model-info.csv
 models_to_run <- c(1)
 
-## modeling options
+## data generating options
 number_of_causes <- 2
 number_of_regions <- 8
 number_of_replications <- 1
@@ -118,7 +118,7 @@ for (a in models_to_run) {
                                                                                           ",q=",q,
                                                                                           ",r=",r,
                                                                                           ",s=",s,
-                                                                                          " -N recover_",
+                                                                                          " -N s2sim_",
                                                                                           a,"_",
                                                                                           b,"_",
                                                                                           c,"_",

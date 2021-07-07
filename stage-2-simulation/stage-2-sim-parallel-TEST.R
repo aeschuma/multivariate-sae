@@ -35,10 +35,10 @@ library(ggplot2);
 ## define directories
 
 # working directory for code
-wd <- paste(root,"Desktop/dissertation/model_development/recover_parameters",sep="")
+wd <- paste0(root,"Desktop/survey-csmf/stage-2-simulation")
 
 # directory to save results
-savedir <- paste(root,"Dropbox/dissertation_2/cause_specific_child_mort/model_development/recover_parameters",sep="")
+savedir <- paste0(root,"Dropbox/dissertation_2/survey-csmf/stage-2-simulation")
 
 ## set directory
 setwd(wd)
@@ -47,62 +47,75 @@ setwd(savedir)
 # set number of cores to the max possible
 options(mc.cores = parallel::detectCores())
 
-## data generation options
-print("cause_re")
-print(as.logical(commandArgs(trailingOnly=TRUE)[1]))
-print("few_corrs")
-print(as.logical(commandArgs(trailingOnly=TRUE)[2]))
-print("time_rw")
-print(as.logical(commandArgs(trailingOnly=TRUE)[3]))
-print("no_corr")
-print(as.logical(commandArgs(trailingOnly=TRUE)[4]))
-print("FE_interactions")
-print(as.logical(commandArgs(trailingOnly=TRUE)[5]))
+number_of_causes <- 2
+number_of_regions <- 8
+number_of_replications <- 1
 
-## modeling options
-print("cause_re_model")
-print(as.logical(commandArgs(trailingOnly=TRUE)[6]))
-print("time_rw_model")
-print(as.logical(commandArgs(trailingOnly=TRUE)[7]))
-print("no_corr_model")
-print(as.logical(commandArgs(trailingOnly=TRUE)[8])) # IMPLIES CAUSE RE AND TIME RW BUT NO CORRELATIONS
-print("FE_interactions_model")
-print(as.logical(commandArgs(trailingOnly=TRUE)[9]))
-
-## dimensions
-print("nyear")
-print(as.numeric(commandArgs(trailingOnly=TRUE)[10]))
-print("nreg")
-print(as.numeric(commandArgs(trailingOnly=TRUE)[11]))
-print("nageg")
-print(as.numeric(commandArgs(trailingOnly=TRUE)[12]))
-print("ncause")
-print(as.numeric(commandArgs(trailingOnly=TRUE)[13]))
-print("rw_vars")
-print(strsplit(as.character(commandArgs(trailingOnly=TRUE)[14]),"_")[[1]])
-print("re_vars")
-print(strsplit(as.character(commandArgs(trailingOnly=TRUE)[15]),"_")[[1]])
-
-## parameters/hyperpars
-print("sigma_rw")
-print(as.numeric(commandArgs(trailingOnly=TRUE)[16]))
-print("sigma_re")
-print(as.numeric(commandArgs(trailingOnly=TRUE)[17]))
-print("rho")
-print(as.numeric(commandArgs(trailingOnly=TRUE)[18]))
-print("exposure")
-print(as.numeric(commandArgs(trailingOnly=TRUE)[19]))
-print("lkj_hyperpar")
-print(as.numeric(commandArgs(trailingOnly=TRUE)[20]))
+## parameters
+beta1 <- 1
+beta2 <- 2
+rho_lower <- -0.2
+rho_upper <- 0.2
+sigmasq_lower <- 0.05
+sigmasq_upper <- 0.5
+sigma_gamma1 <- 1.5
+sigma_gamma2 <- 2.5
+lambda <- 0.5
 
 ## STAN options
-print("niter")
-print(as.numeric(commandArgs(trailingOnly=TRUE)[21]))
-print("nthin")
-print(as.numeric(commandArgs(trailingOnly=TRUE)[22]))
-print("prop_warmup")
-print(as.numeric(commandArgs(trailingOnly=TRUE)[23]))
+niter <- 10000
+nchains <- 3
+prop_warmup <- 0.5
+max_treedepth <- 15
+adapt_delta <- 0.8
 
-# what chain is this?
-print("chain_number")
-print(as.numeric(commandArgs(trailingOnly=TRUE)[24]))
+## Simulation number
+number_of_sims <- 5
+
+## which model to run
+print("models_to_run")
+print(as.logical(commandArgs(trailingOnly=TRUE)[1]))
+
+## data generation options
+print("number_of_causes")
+print(as.logical(commandArgs(trailingOnly=TRUE)[2]))
+print("number_of_regions")
+print(as.logical(commandArgs(trailingOnly=TRUE)[3]))
+print("number_of_replications")
+print(as.logical(commandArgs(trailingOnly=TRUE)[4]))
+
+## parameters
+print("beta1")
+print(as.logical(commandArgs(trailingOnly=TRUE)[5]))
+print("beta2")
+print(as.logical(commandArgs(trailingOnly=TRUE)[6]))
+print("rho_lower")
+print(as.logical(commandArgs(trailingOnly=TRUE)[7]))
+print("rho_upper")
+print(as.logical(commandArgs(trailingOnly=TRUE)[8]))
+print("sigmasq_lower")
+print(as.logical(commandArgs(trailingOnly=TRUE)[9]))
+print("sigmasq_upper")
+print(as.numeric(commandArgs(trailingOnly=TRUE)[10]))
+print("sigma_gamma1")
+print(as.numeric(commandArgs(trailingOnly=TRUE)[11]))
+print("sigma_gamma2")
+print(as.numeric(commandArgs(trailingOnly=TRUE)[12]))
+print("lambda")
+print(as.numeric(commandArgs(trailingOnly=TRUE)[13]))
+
+## stan options
+print("niter")
+print(strsplit(as.character(commandArgs(trailingOnly=TRUE)[14]),"_")[[1]])
+print("nchains")
+print(strsplit(as.character(commandArgs(trailingOnly=TRUE)[15]),"_")[[1]])
+print("prop_warmup")
+print(as.numeric(commandArgs(trailingOnly=TRUE)[16]))
+print("max_treedepth")
+print(as.numeric(commandArgs(trailingOnly=TRUE)[17]))
+print("adapt_delta")
+print(as.numeric(commandArgs(trailingOnly=TRUE)[18]))
+
+## which simulation
+print("simulation number")
+print(as.numeric(commandArgs(trailingOnly=TRUE)[19]))
