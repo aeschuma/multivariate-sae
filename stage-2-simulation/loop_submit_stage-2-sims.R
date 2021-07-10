@@ -44,10 +44,6 @@ setwd(wd)
 ## SIMULATION SETTINGS
 #######################
 
-## set run number from run info CSV
-run_info <- read.csv("results-run-info.csv")
-run_number <- max(run_info$run_number) + 1
-
 ## which models to run?
 # see model-info.csv
 model_to_run <- 1
@@ -81,17 +77,6 @@ adapt_delta <- 0.8
 ## Simulation number
 number_of_sims <- 5
 
-# save run info
-if (!testing_loop & !testing_script) {
-    new_info <- c(run_number, model_to_run,
-                  number_of_causes, number_of_regions, number_of_replications,
-                  beta1, beta2, rho_lower, rho_upper, sigmasq_lower, sigmasq_upper,
-                  sigma_gamma1, sigma_gamma2, lambda, rho_gamma,
-                  niter, nchains, prop_warmup, max_treedepth, adapt_delta,
-                  number_of_sims)
-    run_info <- rbind(run_info, new_info)
-    write.csv(run_info, "results-run-info.csv")
-}
 ## loop and submit jobs
 for (a in model_to_run) {
     for (b in number_of_causes) {
@@ -112,7 +97,24 @@ for (a in model_to_run) {
                                                                 for (p in  prop_warmup) {
                                                                     for (q in  max_treedepth) {
                                                                         for (r in  adapt_delta) {
+                                                                            ## set run number from run info CSV
+                                                                            run_info <- read.csv("results-run-info.csv")
+                                                                            run_number <- max(run_info$run_number) + 1
+                                                                            
+                                                                            # save run info
+                                                                            if (!testing_loop & !testing_script) {
+                                                                                new_info <- c(run_number, a,
+                                                                                              b, c, d,
+                                                                                              e, f, g, h, i, j,
+                                                                                              k, l, m, mm,
+                                                                                              n, o, p, q, r,
+                                                                                              number_of_sims)
+                                                                                run_info <- rbind(run_info, new_info)
+                                                                                write.csv(run_info, "results-run-info.csv", row.names = FALSE)
+                                                                            }
+                                                                            
                                                                             for (s in  1:number_of_sims) {
+                                                                                
                                                                                 if (testing_script) {
                                                                                     script <- "qsub-stage-2-sims-TEST.sh"
                                                                                 } else {
@@ -138,6 +140,7 @@ for (a in model_to_run) {
                                                                                               ",p=",p,
                                                                                               ",q=",q,
                                                                                               ",r=",r,
+                                                                                              ",rr=",run_number,
                                                                                               ",s=",s,
                                                                                               " -N s2sim_",
                                                                                               a,"_",
@@ -159,6 +162,7 @@ for (a in model_to_run) {
                                                                                               p,"_",
                                                                                               q, "_",
                                                                                               r, "_",
+                                                                                              run_number, "_",
                                                                                               s,
                                                                                               " ",
                                                                                               script)

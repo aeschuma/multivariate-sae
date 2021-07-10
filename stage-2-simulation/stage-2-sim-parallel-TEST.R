@@ -93,6 +93,10 @@ print(as.numeric(commandArgs(trailingOnly=TRUE)[18]))
 print("adapt_delta")
 print(as.numeric(commandArgs(trailingOnly=TRUE)[19]))
 
+## run number
+print("run number")
+print(as.numeric(commandArgs(trailingOnly=TRUE)[20]))
+
 ## which simulation
 print("simulation number")
-print(as.numeric(commandArgs(trailingOnly=TRUE)[20]))
+print(as.numeric(commandArgs(trailingOnly=TRUE)[21]))

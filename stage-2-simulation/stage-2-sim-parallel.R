@@ -81,6 +81,7 @@ if (testing) {
     sigma_gamma1 <- 1.5
     sigma_gamma2 <- 2.5
     lambda <- 0.5
+    rho_gamma <- 0.25
     
     ## stan options
     niter <- 5000
