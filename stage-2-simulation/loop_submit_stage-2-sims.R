@@ -75,7 +75,7 @@ max_treedepth <- 25
 adapt_delta <- 0.9
 
 ## Simulation number
-number_of_sims <- 5
+number_of_sims <- 1000
 
 ## loop and submit jobs
 for (a in model_to_run) {
