@@ -172,9 +172,9 @@ for (i in 1:nrow(results)) {
     } else if (tmp_param_name == "beta[2]") {
         tmp_param <- beta2
     } else if (tmp_param_name == "sigma_gamma[1]") {
-        tmp_param <- sigma_gamma[1]
+        tmp_param <- sigma_gamma1
     } else if (tmp_param_name == "sigma_gamma[2]") {
-        tmp_param <- sigma_gamma[2]
+        tmp_param <- sigma_gamma2
     } else {
         tmp_param <- get(tmp_param_name)
     }
