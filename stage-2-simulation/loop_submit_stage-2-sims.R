@@ -5,8 +5,6 @@
 
 rm(list=ls())
 
-library(readr) # read_csv() function
-
 ## set the root depending on operating system
 root <- ifelse(Sys.info()[1]=="Darwin","~/",
                ifelse(Sys.info()[1]=="Windows","P:/",
@@ -47,7 +45,7 @@ setwd(wd)
 #######################
 
 ## set run number from run info CSV
-run_info <- read_csv("results-run-info.csv")
+run_info <- read.csv("results-run-info.csv")
 run_number <- max(run_info$run_number) + 1
 
 ## which models to run?
@@ -92,7 +90,7 @@ if (!testing_loop & !testing_script) {
                   niter, nchains, prop_warmup, max_treedepth, adapt_delta,
                   number_of_sims)
     run_info <- rbind(run_info, new_info)
-    write_csv(run_info, "results-run-info.csv")
+    write.csv(run_info, "results-run-info.csv")
 }
 ## loop and submit jobs
 for (a in model_to_run) {
