@@ -5,6 +5,8 @@
 
 rm(list=ls())
 
+library(readr) # read_csv() function
+
 ## set the root depending on operating system
 root <- ifelse(Sys.info()[1]=="Darwin","~/",
                ifelse(Sys.info()[1]=="Windows","P:/",
