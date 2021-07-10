@@ -28,7 +28,7 @@ if (root == "P:/") {
 
 ## testing?
 testing_loop <- FALSE
-testing_script <- TRUE
+testing_script <- FALSE
 
 ## define directories
 
@@ -68,11 +68,11 @@ lambda <- 0.5
 rho_gamma <- 0.25
 
 ## STAN options
-niter <- 10000
-nchains <- 2
+niter <- 8000
+nchains <- 3
 prop_warmup <- 0.5
-max_treedepth <- 15
-adapt_delta <- 0.8
+max_treedepth <- 25
+adapt_delta <- 0.9
 
 ## Simulation number
 number_of_sims <- 5

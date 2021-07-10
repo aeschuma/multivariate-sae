@@ -36,7 +36,7 @@ library(ggplot2); library(tidyverse);
 ## TESTING THE CODE?
 ########
 
-testing <- TRUE
+testing <- FALSE
 
 ## define directories
 
@@ -90,6 +90,9 @@ if (testing) {
     max_treedepth <- 15
     adapt_delta <- 0.8
     
+    ## which run
+    run_number <- 1
+    
     ## which simulation
     sim <- 3
 } else {
@@ -121,8 +124,11 @@ if (testing) {
     max_treedepth <- as.numeric(commandArgs(trailingOnly=TRUE)[18])
     adapt_delta <- as.numeric(commandArgs(trailingOnly=TRUE)[19])
     
+    ## which run
+    run_number <- as.numeric(commandArgs(trailingOnly=TRUE)[20])
+    
     ## which simulation
-    sim <- as.numeric(commandArgs(trailingOnly=TRUE)[20])
+    sim <- as.numeric(commandArgs(trailingOnly=TRUE)[21])
 }
 
 # simulate data
@@ -153,36 +159,32 @@ mod_summary <- summary(stan_list$mod_stan,
 posterior_qs <- mod_summary$summary[, c("10%", "50%", "90%")]
 extracted_params <- rownames(posterior_qs)
 
-# truth
-beta <- c(beta1, beta2)
-sigma_gamma <- c(sigma_gamma1, sigma_gamma2)
-absolute_bias <- relative_bias <- coverage <- width <- vector(mode = "list", length = length(params_to_extract))
-for (i in 1:length(params_to_extract)) {
-    tmp_param_name <- params_to_extract[i]
-    tmp_param <- get(tmp_param_name)
-    if (tmp_param_name == "beta") {
-        beta_est <- posterior_qs[c("beta[1]", "beta[2]"), "50%"]
-        beta_ci <- posterior_qs[c("beta[1]", "beta[2]"), c("10%", "90%")]
-        absolute_bias[[i]] <- beta_est - tmp_param
-        relative_bias[[i]] <- (beta_est - tmp_param)/tmp_param
-        coverage[[i]]  <- (tmp_param > beta_ci[, "10%"]) & (tmp_param < beta_ci[, "90%"])
-        width[[i]] <- beta_ci[, "90%"] - beta_ci[, "10%"]
-    } else if (tmp_param_name == "sigma_gamma") {
-        sigma_gamma_est <- posterior_qs[c("sigma_gamma[1]", "sigma_gamma[2]"), "50%"]
-        sigma_gamma_ci <- posterior_qs[c("sigma_gamma[1]", "sigma_gamma[2]"), c("10%", "90%")]
-        absolute_bias[[i]] <- sigma_gamma_est - tmp_param
-        relative_bias[[i]] <- (sigma_gamma_est - tmp_param)/tmp_param
-        coverage[[i]]  <- (tmp_param > sigma_gamma_ci[, "10%"]) & (tmp_param < sigma_gamma_ci[, "90%"])
-        width[[i]] <- sigma_gamma_ci[, "90%"] - sigma_gamma_ci[, "10%"]
+# compile results
+results <- data.frame(param = rownames(posterior_qs),
+                      absolute_bias = NA,
+                      relative_bias = NA,
+                      coverage = NA,
+                      width = NA)
+for (i in 1:nrow(results)) {
+    tmp_param_name <- rownames(posterior_qs)[i]
+    if (tmp_param_name == "beta[1]") {
+        tmp_param <- beta1
+    } else if (tmp_param_name == "beta[2]") {
+        tmp_param <- beta2
+    } else if (tmp_param_name == "sigma_gamma[1]") {
+        tmp_param <- sigma_gamma[1]
+    } else if (tmp_param_name == "sigma_gamma[2]") {
+        tmp_param <- sigma_gamma[2]
     } else {
-        absolute_bias[[i]] <- posterior_qs[tmp_param_name, "50%"] - tmp_param
-        relative_bias[[i]] <- (posterior_qs[tmp_param_name, "50%"] - tmp_param)/tmp_param
-        coverage[[i]]  <- (tmp_param > posterior_qs[tmp_param_name, "10%"]) & (tmp_param < posterior_qs[tmp_param_name, "90%"])
-        width[[i]] <- posterior_qs[tmp_param_name, "90%"] - posterior_qs[tmp_param_name, "10%"]
+        tmp_param <- get(tmp_param_name)
     }
+    results$absolute_bias[i] <- posterior_qs[tmp_param_name, "50%"] - tmp_param
+    results$relative_bias[i] <- (posterior_qs[tmp_param_name, "50%"] - tmp_param)/tmp_param
+    results$coverage[i] <- (tmp_param > posterior_qs[tmp_param_name, "10%"]) & (tmp_param < posterior_qs[tmp_param_name, "90%"])
+    results$width[i] <- posterior_qs[tmp_param_name, "90%"] - posterior_qs[tmp_param_name, "10%"]
 }
-results <- list(absolute_bias, relative_bias, coverage, width)
+
 # save results
 setwd(savedir)
 save_id <- paste(model_number, sep = "-")
-saveRDS(results, paste0("tmp/res-", ""))
+saveRDS(results, paste0("tmp/results_run-", run_number, "_sim-", sim, ".rds"))
