@@ -30,7 +30,7 @@ if (root == "/home/students/aeschuma/") {
 }
 library(mvtnorm); library(MASS);library(gtools); library(parallel);
 library(scales); library(RColorBrewer);library(data.table);
-library(ggplot2); library(tidyverse);
+library(ggplot2); 
 
 ########
 ## TESTING THE CODE?
