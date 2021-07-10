@@ -58,7 +58,7 @@ options(mc.cores = parallel::detectCores())
 source("simulation-functions.R")
 
 # load model csv to load which model we're running
-models_dat <- read_csv("model-info.csv")
+models_dat <- read.csv("model-info.csv")
 
 ## set parameters!
 if (testing) {
