@@ -184,7 +184,12 @@ for (i in 1:nrow(results)) {
     results$width[i] <- posterior_qs[tmp_param_name, "90%"] - posterior_qs[tmp_param_name, "10%"]
 }
 
+stan_diags <- data.frame(n_divergent = get_num_divergent(stan_list$mod_stan),
+                         n_max_tree_exceeded = get_num_max_treedepth(stan_list$mod_stan),
+                         n_bmfi_low_chains = sum(is.finite(get_low_bfmi_chains(stan_list$mod_stan))))
+
 # save results
 setwd(savedir)
 save_id <- paste(model_number, sep = "-")
 saveRDS(results, paste0("tmp/results_run-", run_number, "_sim-", sim, ".rds"))
+saveRDS(stan_diags, paste0("tmp/standiags_run-", run_number, "_sim-", sim, ".rds"))
