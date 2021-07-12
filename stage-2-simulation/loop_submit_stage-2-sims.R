@@ -46,7 +46,7 @@ setwd(wd)
 
 ## which models to run?
 # see model-info.csv
-model_to_run <- 1
+model_to_run <- 2
 
 ## data generating options
 number_of_causes <- 2
@@ -65,14 +65,14 @@ sigmasq_upper <- 0.5
 sigma_gamma1 <- 1.5
 sigma_gamma2 <- 2.5
 lambda <- 0.5
-rho_gamma <- 0.25
+rho_gamma <- 0.5
 
 ## STAN options
-niter <- 8000
+niter <- 10000
 nchains <- 3
 prop_warmup <- 0.5
-max_treedepth <- 25
-adapt_delta <- 0.9
+max_treedepth <- 20
+adapt_delta <- 0.8
 
 ## Simulation number
 number_of_sims <- 1000
