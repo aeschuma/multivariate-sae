@@ -28,9 +28,7 @@ if (root == "/home/students/aeschuma/") {
 } else {
     library(Rcpp); library(StanHeaders); library(BH); library(rstan);library(bayesplot);
 }
-library(mvtnorm); library(MASS);library(gtools); library(parallel);
-library(scales); library(RColorBrewer);library(data.table);
-library(ggplot2); 
+library(parallel);library(scales); library(RColorBrewer);library(data.table);library(ggplot2); 
 
 ########
 ## TESTING THE CODE?
@@ -78,10 +76,13 @@ for (i in 1:length(diagfiles)) {
 diags_comp <- as.data.frame(t(apply(diags, 2, mean)))
 names(diags_comp) <- paste0("mean_", stan_diag_names)
 
-# save results
-setwd(savedir)
-save(results_comp, diags_comp, file = paste0("results-diags_run-", run_number,".Rdata"))
-
-# delete tmp files
-setwd(paste0(savedir,"/tmp"))
-sapply(c(resfiles, diagfiles), unlink)
+if (!testing) {
+    # save results
+    setwd(savedir)
+    save(results_comp, diags_comp, file = paste0("results-diags_run-", run_number,".Rdata"))
+    
+    # delete tmp files
+    setwd(paste0(savedir,"/tmp"))
+    sapply(c(resfiles, diagfiles), unlink)
+    
+}
