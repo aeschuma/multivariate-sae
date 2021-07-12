@@ -63,7 +63,7 @@ models_dat <- read.csv("model-info.csv")
 ## set parameters!
 if (testing) {
     ## which model to run
-    model_number <- 2
+    model_number <- 1
     model_to_run <- models_dat$model_name[model_number]
     
     ## data generation options
@@ -81,6 +81,7 @@ if (testing) {
     sigma_gamma1 <- 1.5
     sigma_gamma2 <- 2.5
     lambda <- 0.5
+    sigma_delta <- 1
     rho_gamma <- 0.5
     
     ## stan options
@@ -115,20 +116,21 @@ if (testing) {
     sigma_gamma1 <- as.numeric(commandArgs(trailingOnly=TRUE)[11])
     sigma_gamma2 <- as.numeric(commandArgs(trailingOnly=TRUE)[12])
     lambda <- as.numeric(commandArgs(trailingOnly=TRUE)[13])
-    rho_gamma <- as.numeric(commandArgs(trailingOnly=TRUE)[14])
+    sigma_delta <- as.numeric(commandArgs(trailingOnly=TRUE)[14])
+    rho_gamma <- as.numeric(commandArgs(trailingOnly=TRUE)[15])
     
     ## stan options
-    niter <- as.numeric(commandArgs(trailingOnly=TRUE)[15])
-    nchains <- as.numeric(commandArgs(trailingOnly=TRUE)[16])
-    prop_warmup <- as.numeric(commandArgs(trailingOnly=TRUE)[17])
-    max_treedepth <- as.numeric(commandArgs(trailingOnly=TRUE)[18])
-    adapt_delta <- as.numeric(commandArgs(trailingOnly=TRUE)[19])
+    niter <- as.numeric(commandArgs(trailingOnly=TRUE)[16])
+    nchains <- as.numeric(commandArgs(trailingOnly=TRUE)[17])
+    prop_warmup <- as.numeric(commandArgs(trailingOnly=TRUE)[18])
+    max_treedepth <- as.numeric(commandArgs(trailingOnly=TRUE)[19])
+    adapt_delta <- as.numeric(commandArgs(trailingOnly=TRUE)[20])
     
     ## which run
-    run_number <- as.numeric(commandArgs(trailingOnly=TRUE)[20])
+    run_number <- as.numeric(commandArgs(trailingOnly=TRUE)[21])
     
     ## which simulation
-    sim <- as.numeric(commandArgs(trailingOnly=TRUE)[21])
+    sim <- as.numeric(commandArgs(trailingOnly=TRUE)[22])
 }
 
 # simulate data
@@ -140,6 +142,7 @@ simulated_data <- simulateData(R = number_of_regions,
                                sigmasq_lower = sigmasq_lower, sigmasq_upper = sigmasq_upper,
                                sigma_gamma = c(sigma_gamma1, sigma_gamma2),
                                lambda = lambda,
+                               sigma_delta = sigma_delta,
                                rho_gamma = rho_gamma,
                                seed = 1 + (sim * 2),
                                dgm = model_to_run)

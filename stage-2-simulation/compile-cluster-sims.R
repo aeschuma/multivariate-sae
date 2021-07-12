@@ -84,5 +84,6 @@ if (!testing) {
     # delete tmp files
     setwd(paste0(savedir,"/tmp"))
     sapply(c(resfiles, diagfiles), unlink)
-    
+    setwd(paste0(savedir,"/../../out/stage-2-simulation"))
+    sapply(list.files(), unlink)
 }

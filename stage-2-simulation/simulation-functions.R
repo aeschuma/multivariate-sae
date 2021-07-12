@@ -14,6 +14,9 @@
 #   sigmasq_lower, sigmasq_upper: lower and upper bounds for variance components
 #                                 of fixed covariance (generated form runif())
 #   sigma_gamma: SD of IID random effects (on region or on region x cause)
+#   lambda: scaling parameter for shared component specification
+#   sigma_delta: SD of shared IID RE (on region) for the shared RE specification
+#   rho_gamma: correlation for bivariate RE specification
 #   dgm: data generating mechanism, one of:
 #        c("cause FE only",
 #          "cause FE, region IID RE sum to zero",
@@ -47,6 +50,7 @@ simulateData <- function(R, I, C,
                          sigmasq_lower = 0.05, sigmasq_upper = 0.5,
                          sigma_gamma = 2,
                          lambda = NULL,
+                         sigma_delta = NULL,
                          rho_gamma = NULL,
                          dgm,
                          seed = 8008135,
@@ -63,9 +67,10 @@ simulateData <- function(R, I, C,
         sigmasq_upper = 0.5
         sigma_gamma = c(1.5, 2)
         lambda = 0.5
+        sigma_delta = 1
         rho_gamma = 0.5
         seed = 8008135
-        dgm = "2 cause FE, bivariate region IID RE noncentered"
+        dgm = "2 cause FE, shared region IID RE"
     }
     
     # set seed
@@ -118,6 +123,9 @@ simulateData <- function(R, I, C,
     if (is.null(lambda) & dgm %in% c("2 cause FE, shared region IID RE")) {
         stop(paste0("need to specify lambda for dgm: ", dgm))
     }
+    if (is.null(sigma_delta) & dgm %in% c("2 cause FE, shared region IID RE")) {
+        stop(paste0("need to specify sigma_delta for dgm: ", dgm))
+    }
     if (is.null(rho_gamma) & dgm %in% c("2 cause FE, bivariate region IID RE",
                                         "2 cause FE, bivariate region IID RE noncentered")) {
         stop(paste0("need to specify rho_gamma for dgm: ", dgm))
@@ -143,8 +151,7 @@ simulateData <- function(R, I, C,
     gamma_r_mat <- matrix(rep(rep(gamma_r, each = C), I), nrow = N, ncol = C, byrow = TRUE)
     gamma_rc_mat <- matrix(rep(gamma_rc, I), nrow = N, ncol = C, byrow = TRUE)
     if (dgm %in% c("cause FE, separate region IID RE by cause",
-                   "cause FE, separate region IID RE by cause sum to zero",
-                   "2 cause FE, shared region IID RE")) {
+                   "cause FE, separate region IID RE by cause sum to zero")) {
         gamma_rc <- matrix(NA, nrow = R, ncol = C)
         for (c in 1:C) {
             gamma_rc[, c] <- rnorm(R, 0, sigma_gamma[c])
@@ -153,6 +160,15 @@ simulateData <- function(R, I, C,
             }
         }
         gamma_rc_mat <- gamma_rc[rep(1:R, I),]
+    }
+    if (dgm %in% c("2 cause FE, shared region IID RE")) {
+        gamma_rc <- matrix(NA, nrow = R, ncol = C)
+        for (c in 1:C) {
+            gamma_rc[, c] <- rnorm(R, 0, sigma_gamma[c])
+        }
+        gamma_rc_mat <- gamma_rc[rep(1:R, I),]
+        delta <- rnorm(R, 0, sigma_delta)
+        delta_rc <- delta[rep(1:R, I)]
     }
     if (dgm %in% c("2 cause FE, bivariate region IID RE",
                    "2 cause FE, bivariate region IID RE noncentered")) {
@@ -208,8 +224,8 @@ simulateData <- function(R, I, C,
                                   "cause FE, separate region IID RE by cause sum to zero")) {
                 y[i, ] <- rmvnorm(1, beta + gamma_rc_mat[i, ], Sigma.array[i,,])
             } else if (dgm %in% c("2 cause FE, shared region IID RE")) {
-                mu <- c(beta[1] + gamma_rc_mat[i, 1],
-                        beta[2] + gamma_rc_mat[i, 2] + (lambda * gamma_rc_mat[i, 1]))
+                mu <- c(beta[1] + gamma_rc_mat[i, 1] + (lambda * delta_rc[i]),
+                        beta[2] + gamma_rc_mat[i, 2] + (1/lambda * delta_rc[i]))
                 y[i, ] <- rmvnorm(1, mu, Sigma.array[i,,])
             } else if (dgm %in% c("2 cause FE, bivariate region IID RE",
                                   "2 cause FE, bivariate region IID RE noncentered")) {
@@ -273,7 +289,8 @@ simulateData <- function(R, I, C,
                            sigma_gamma = sigma_gamma,
                            gamma_rc = gamma_rc,
                            gamma_rc_mat = gamma_rc_mat,
-                           lambda = lambda)
+                           lambda = lambda,
+                           sigma_delta = sigma_delta)
         } else if (dgm %in% c("2 cause FE, bivariate region IID RE",
                               "2 cause FE, bivariate region IID RE noncentered")) {
             datlist <- list(N = N,

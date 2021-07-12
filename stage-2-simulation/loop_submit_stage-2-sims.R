@@ -65,14 +65,15 @@ sigmasq_upper <- 0.5
 sigma_gamma1 <- 1.5
 sigma_gamma2 <- 2.5
 lambda <- 0.5
+sigma_delta <- 1
 rho_gamma <- 0.5
 
 ## STAN options
-niter <- 8000
+niter <- 10000
 nchains <- 2
 prop_warmup <- 0.5
-max_treedepth <- 20
-adapt_delta <- 0.8
+max_treedepth <- 25
+adapt_delta <- 0.95
 
 ## Simulation number
 number_of_sims <- 1000
@@ -91,86 +92,90 @@ for (a in model_to_run) {
                                         for (k in  sigma_gamma1) {
                                             for (l in  sigma_gamma2) {
                                                 for (m in  lambda) {
-                                                    for (mm in  rho_gamma) {
-                                                        for (n in  niter) {
-                                                            for (o in  nchains) {
-                                                                for (p in  prop_warmup) {
-                                                                    for (q in  max_treedepth) {
-                                                                        for (r in  adapt_delta) {
-                                                                            ## set run number from run info CSV
-                                                                            run_info <- read.csv("results-run-info.csv")
-                                                                            run_number <- max(run_info$run_number) + 1
-                                                                            
-                                                                            # save run info
-                                                                            if (!testing_loop & !testing_script) {
-                                                                                new_info <- c(run_number, a,
-                                                                                              b, c, d,
-                                                                                              e, f, g, h, i, j,
-                                                                                              k, l, m, mm,
-                                                                                              n, o, p, q, r,
-                                                                                              number_of_sims)
-                                                                                run_info <- rbind(run_info, new_info)
-                                                                                write.csv(run_info, "results-run-info.csv", row.names = FALSE)
-                                                                            }
-                                                                            
-                                                                            for (s in  1:number_of_sims) {
+                                                    for (mmm in sigma_delta) {
+                                                        for (mm in  rho_gamma) {
+                                                            for (n in  niter) {
+                                                                for (o in  nchains) {
+                                                                    for (p in  prop_warmup) {
+                                                                        for (q in  max_treedepth) {
+                                                                            for (r in  adapt_delta) {
+                                                                                ## set run number from run info CSV
+                                                                                run_info <- read.csv("results-run-info.csv")
+                                                                                run_number <- max(run_info$run_number) + 1
                                                                                 
-                                                                                if (testing_script) {
-                                                                                    script <- "qsub-stage-2-sims-TEST.sh"
-                                                                                } else {
-                                                                                    script <- "qsub-stage-2-sims.sh" 
+                                                                                # save run info
+                                                                                if (!testing_loop & !testing_script) {
+                                                                                    new_info <- c(run_number, a,
+                                                                                                  b, c, d,
+                                                                                                  e, f, g, h, i, j,
+                                                                                                  k, l, m, mmm, mm,
+                                                                                                  n, o, p, q, r,
+                                                                                                  number_of_sims)
+                                                                                    run_info <- rbind(run_info, new_info)
+                                                                                    write.csv(run_info, "results-run-info.csv", row.names = FALSE)
                                                                                 }
-                                                                                sub <- paste0("qsub -l h=\"b34|b35|b36|b37\" -pe local ", o, " -v ",
-                                                                                              "a=",a,
-                                                                                              ",b=",b,
-                                                                                              ",c=",c,
-                                                                                              ",d=",d,
-                                                                                              ",e=",e,
-                                                                                              ",f=",f,
-                                                                                              ",g=",g,
-                                                                                              ",h=",h,
-                                                                                              ",ii=",i,
-                                                                                              ",j=",j,
-                                                                                              ",k=",k,
-                                                                                              ",l=",l,
-                                                                                              ",m=",m,
-                                                                                              ",mm=",mm,
-                                                                                              ",n=",n,
-                                                                                              ",o=",o,
-                                                                                              ",p=",p,
-                                                                                              ",q=",q,
-                                                                                              ",r=",r,
-                                                                                              ",rr=",run_number,
-                                                                                              ",s=",s,
-                                                                                              " -N s2sim_",
-                                                                                              a,"_",
-                                                                                              b,"_",
-                                                                                              c,"_",
-                                                                                              d,"_",
-                                                                                              e, "_",
-                                                                                              f, "_",
-                                                                                              g,"_",
-                                                                                              h,"_",
-                                                                                              i,"_",
-                                                                                              j,"_",
-                                                                                              k, "_",
-                                                                                              l, "_",
-                                                                                              m,"_",
-                                                                                              mm,"_",
-                                                                                              n,"_",
-                                                                                              o,"_",
-                                                                                              p,"_",
-                                                                                              q, "_",
-                                                                                              r, "_",
-                                                                                              run_number, "_",
-                                                                                              s,
-                                                                                              " ",
-                                                                                              script)
                                                                                 
-                                                                                if (testing_loop) {
-                                                                                    print(sub)
-                                                                                } else {
-                                                                                    system(sub)
+                                                                                for (s in  1:number_of_sims) {
+                                                                                    
+                                                                                    if (testing_script) {
+                                                                                        script <- "qsub-stage-2-sims-TEST.sh"
+                                                                                    } else {
+                                                                                        script <- "qsub-stage-2-sims.sh" 
+                                                                                    }
+                                                                                    sub <- paste0("qsub -l h=\"b34|b35|b36|b37\" -pe local ", o, " -v ",
+                                                                                                  "a=",a,
+                                                                                                  ",b=",b,
+                                                                                                  ",c=",c,
+                                                                                                  ",d=",d,
+                                                                                                  ",e=",e,
+                                                                                                  ",f=",f,
+                                                                                                  ",g=",g,
+                                                                                                  ",h=",h,
+                                                                                                  ",ii=",i,
+                                                                                                  ",j=",j,
+                                                                                                  ",k=",k,
+                                                                                                  ",l=",l,
+                                                                                                  ",m=",m,
+                                                                                                  ",mmm=",mmm,
+                                                                                                  ",mm=",mm,
+                                                                                                  ",n=",n,
+                                                                                                  ",o=",o,
+                                                                                                  ",p=",p,
+                                                                                                  ",q=",q,
+                                                                                                  ",r=",r,
+                                                                                                  ",rr=",run_number,
+                                                                                                  ",s=",s,
+                                                                                                  " -N s2sim_",
+                                                                                                  a,"_",
+                                                                                                  b,"_",
+                                                                                                  c,"_",
+                                                                                                  d,"_",
+                                                                                                  e, "_",
+                                                                                                  f, "_",
+                                                                                                  g,"_",
+                                                                                                  h,"_",
+                                                                                                  i,"_",
+                                                                                                  j,"_",
+                                                                                                  k, "_",
+                                                                                                  l, "_",
+                                                                                                  m,"_",
+                                                                                                  mmm,"_",
+                                                                                                  mm,"_",
+                                                                                                  n,"_",
+                                                                                                  o,"_",
+                                                                                                  p,"_",
+                                                                                                  q, "_",
+                                                                                                  r, "_",
+                                                                                                  run_number, "_",
+                                                                                                  s,
+                                                                                                  " ",
+                                                                                                  script)
+                                                                                    
+                                                                                    if (testing_loop) {
+                                                                                        print(sub)
+                                                                                    } else {
+                                                                                        system(sub)
+                                                                                    }
                                                                                 }
                                                                             }
                                                                         }

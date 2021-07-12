@@ -30,7 +30,8 @@ model {
     sum(alpha1) ~ normal(R * beta[1], 0.001 * R);  // equivalent to mean(alpha1) ~ normal(0,0.001)
     alpha2 ~ normal(beta[2], sigma_gamma[2]); // IID normal REs on region
     sum(alpha2) ~ normal(R * beta[2], 0.001 * R);  // equivalent to mean(alpha2) ~ normal(0,0.001)
-    delta ~ normal(0, sigma_gamma[2]); // shared IID normal REs on region
+    delta ~ normal(0, sigma_delta); // shared IID normal REs on region
     sigma_gamma ~ student_t(3,0,1); // leads to a half t prior
+    sigma_delta ~ student_t(3,0,1); // leads to a half t prior
     beta ~ normal(0,5); 
 }
