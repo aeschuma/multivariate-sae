@@ -1,4 +1,4 @@
-model_number	model_name	stan_model_file
-0	"2 cause FE, shared region IID RE (OLD)"	NA
-1	"2 cause FE, shared region IID RE"	stan-models/fixed-cov-2cause-fe-shared-iid-re-region.stan
-2	"2 cause FE, bivariate region IID RE noncentered"	stan-models/fixed-cov-2cause-fe-bivariate-iid-re-region-noncentered.stan
+model_number,model_name,stan_model_file
+0," ""2 cause FE shared region IID RE (OLD)""",NA
+1," ""2 cause FE shared region IID RE""","""stan-models/fixed-cov-2cause-fe-shared-iid-re-region.stan"""
+2," ""2 cause FE bivariate region IID RE noncentered""","""stan-models/fixed-cov-2cause-fe-bivariate-iid-re-region-noncentered.stan"""
