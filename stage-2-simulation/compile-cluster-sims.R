@@ -37,3 +37,51 @@ library(ggplot2);
 ########
 
 testing <- FALSE
+
+## define directories
+
+# working directory for code
+wd <- paste0(root,"Desktop/survey-csmf/stage-2-simulation")
+
+# directory to save results
+savedir <- paste0(root,"Dropbox/dissertation_2/survey-csmf/results/stage-2-simulation")
+
+## set directory
+setwd(paste0(savedir,"/tmp"))
+
+## files
+files <- list.files()
+resfiles <- grep("results_", files, value = TRUE)
+diagfiles <- grep("standiags_", files, value = TRUE)
+
+## extract run number to name saved results
+run_number <- as.numeric(regmatches(resfiles[1], regexec("results_run-\\s*(.*?)\\s*_", resfiles[1]))[[1]][2])
+
+# compile results
+results <- readRDS(resfiles[1])
+paramnames <- as.character(results$param)
+measurenames <- names(results)[which(names(results) != "param")]
+results <- array(NA, c(nrow(results), ncol(results) - 1, length(resfiles)))
+for (i in 1:length(resfiles)) {
+    results[,,i] <- as.matrix(readRDS(resfiles[i])[, measurenames])
+}
+results_comp <- cbind(paramnames, as.data.frame(apply(results, c(1, 2), mean)))
+names(results_comp) <- c("param", paste0("mean_",measurenames))
+
+# compile diagnosics
+diags <- readRDS(diagfiles[1])
+stan_diag_names <- names(diags)
+diags <- matrix(NA, nrow = length(diagfiles), ncol = ncol(diags))
+for (i in 1:length(diagfiles)) {
+    diags[i,] <- as.matrix(readRDS(diagfiles[i]))
+}
+diags_comp <- as.data.frame(t(apply(diags, 2, mean)))
+names(diags_comp) <- paste0("mean_", stan_diag_names)
+
+# save results
+setwd(savedir)
+save(results_comp, diags_comp, file = paste0("results-diags_run-", run_number,".Rdata"))
+
+# delete tmp files
+setwd(paste0(savedir,"/tmp"))
+sapply(c(resfiles, diagfiles), unlink)

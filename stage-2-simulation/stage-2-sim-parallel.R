@@ -36,7 +36,7 @@ library(ggplot2);
 ## TESTING THE CODE?
 ########
 
-testing <- FALSE
+testing <- TRUE
 
 ## define directories
 
@@ -94,7 +94,7 @@ if (testing) {
     run_number <- 1
     
     ## which simulation
-    sim <- 3
+    sim <- 1
 } else {
     ## which model to run
     model_number <- as.numeric(commandArgs(trailingOnly=TRUE)[1])
