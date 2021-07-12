@@ -19,7 +19,7 @@ transformed parameters {
 
     for (i in 1:N) {
          mu[i, 1] = alpha1[regions[i]] + (lambda * delta[regions[i]]); //
-         mu[i, 2] = alpha2[regions[i]] + (lambda * delta[regions[i]]); //
+         mu[i, 2] = alpha2[regions[i]] + (1/lambda * delta[regions[i]]); //
     }
 }
 model {

@@ -36,7 +36,7 @@ library(ggplot2);
 ## TESTING THE CODE?
 ########
 
-testing <- TRUE
+testing <- FALSE
 
 ## define directories
 
