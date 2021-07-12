@@ -36,7 +36,7 @@ library(ggplot2);
 ## TESTING THE CODE?
 ########
 
-testing <- FALSE
+testing <- TRUE
 
 ## define directories
 
@@ -63,7 +63,7 @@ models_dat <- read.csv("model-info.csv")
 ## set parameters!
 if (testing) {
     ## which model to run
-    model_number <- 1
+    model_number <- 2
     model_to_run <- models_dat$model_name[model_number]
     
     ## data generation options
@@ -81,7 +81,7 @@ if (testing) {
     sigma_gamma1 <- 1.5
     sigma_gamma2 <- 2.5
     lambda <- 0.5
-    rho_gamma <- 0.25
+    rho_gamma <- 0.5
     
     ## stan options
     niter <- 5000
@@ -192,7 +192,6 @@ stan_diags <- data.frame(n_divergent = get_num_divergent(stan_list$mod_stan),
 if (!testing) {
     # save results
     setwd(savedir)
-    save_id <- paste(model_number, sep = "-")
     saveRDS(results, paste0("tmp/results_run-", run_number, "_sim-", sim, ".rds"))
     saveRDS(stan_diags, paste0("tmp/standiags_run-", run_number, "_sim-", sim, ".rds"))
 }

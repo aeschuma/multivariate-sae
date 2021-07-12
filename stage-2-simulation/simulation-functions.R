@@ -287,7 +287,7 @@ simulateData <- function(R, I, C,
                            sigma_gamma = sigma_gamma,
                            gamma_rc = gamma_rc,
                            gamma_rc_mat = gamma_rc_mat,
-                           rho_gamma = lambda)
+                           rho_gamma = rho_gamma)
         } else {
             stop("this data generating mechanism not yet supported for multiple causes")
         }

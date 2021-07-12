@@ -35,3 +35,8 @@ model {
     sigma_gamma ~ student_t(3,0,1); // leads to a half t prior
     beta ~ normal(0,5); 
 }
+generated quantities {
+    real rho_gamma;
+    
+    rho_gamma = Omega[1, 2];
+}

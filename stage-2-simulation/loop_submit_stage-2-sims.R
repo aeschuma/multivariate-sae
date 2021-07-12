@@ -68,8 +68,8 @@ lambda <- 0.5
 rho_gamma <- 0.5
 
 ## STAN options
-niter <- 10000
-nchains <- 3
+niter <- 8000
+nchains <- 2
 prop_warmup <- 0.5
 max_treedepth <- 20
 adapt_delta <- 0.8
