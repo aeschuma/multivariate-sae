@@ -140,6 +140,7 @@ simulated_data <- simulateData(R = number_of_regions,
                                sigmasq_lower = sigmasq_lower, sigmasq_upper = sigmasq_upper,
                                sigma_gamma = c(sigma_gamma1, sigma_gamma2),
                                lambda = lambda,
+                               rho_gamma = rho_gamma,
                                seed = 1 + (sim * 2),
                                dgm = model_to_run)
 
