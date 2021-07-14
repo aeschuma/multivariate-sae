@@ -36,7 +36,7 @@ library(ggplot2);
 ## TESTING THE CODE?
 ########
 
-testing <- FALSE
+testing <- TRUE
 
 ## define directories
 
@@ -65,12 +65,12 @@ models_dat <- read.csv("model-info.csv")
 ## set parameters!
 if (testing) {
     ## which model to run
-    model_number <- 3
+    model_number <- 1
     model_to_run <- models_dat$model_name[models_dat$model_number == model_number]
     
     ## data generation options
     number_of_causes <- 2
-    number_of_regions <- 10
+    number_of_regions <- 15
     number_of_replications <- 5
     
     ## parameters
@@ -91,7 +91,7 @@ if (testing) {
     nchains <- 2
     prop_warmup <- 0.5
     max_treedepth <- 20
-    adapt_delta <- 0.9
+    adapt_delta <- 0.8
     
     ## which run
     run_number <- 1
@@ -156,8 +156,7 @@ stan_list <- fitSTAN(model_to_run, simulated_data$datlist,
 
 # save parameter names in order to extract and save results
 param_names <- names(simulated_data$params)
-params_to_extract <- param_names[!(param_names %in% c(grep("gamma_", param_names, value = TRUE),
-                                                      grep("delta_", param_names, value = TRUE)))]
+params_to_extract <- param_names[!(param_names %in% grep("gamma_", param_names, value = TRUE))]
 
 # summaries
 mod_summary <- summary(stan_list$mod_stan,
@@ -212,11 +211,11 @@ if (testing) {
     # make diagnostic plots
     stan_trace(stan_list$mod_stan, pars = c("beta", "sigma_gamma", "lambda", "sigma_delta"))
     pairs(stan_list$mod_stan, pars = c("beta", "sigma_gamma", "lambda", "sigma_delta"))
-    # mcmc_areas(as.matrix(stan_list$mod_stan),
-    #            pars = c("beta[1]", "beta[2]", 
-    #                     "sigma_gamma[1]", "sigma_gamma[2]",
-    #                     "lambda", "sigma_delta"),
-    #            prob = 0.8)
+    mcmc_areas(as.matrix(stan_list$mod_stan),
+               pars = c("beta[1]", "beta[2]", 
+                        "sigma_gamma[1]", "sigma_gamma[2]",
+                        "lambda", "sigma_delta"),
+               prob = 0.8)
     mcmc_nuts_energy(nuts_params(stan_list$mod_stan))
     
     # plot gammas vs posterior median gamma-hat
@@ -242,7 +241,7 @@ if (testing) {
          ylab = "True alphas", 
          pch = 19, col = alpha("indianred", 0.5))
     abline(0, 1, col = "darkgreen")
-    plot(simulated_data$params$delta_rc ~ delta_hat,
+    plot(simulated_data$params$delta ~ delta_hat,
          xlab = "Shared RE",
          ylab = "True deltas", 
          pch = 19, col = alpha("orchid3", 0.5))

@@ -1,4 +1,7 @@
 model_number,model_name,stan_model_file
-0," ""2 cause FE shared region IID RE (OLD)""",NA
-1," ""2 cause FE shared region IID RE""","""stan-models/fixed-cov-2cause-fe-shared-iid-re-region.stan"""
-2," ""2 cause FE bivariate region IID RE noncentered""","""stan-models/fixed-cov-2cause-fe-bivariate-iid-re-region-noncentered.stan"""
+0,"2 cause FE, shared region IID RE (OLD)",NA
+1,"2 cause FE, shared region IID RE (old 2)",stan-models/fixed-cov-2cause-fe-shared-iid-re-region.stan
+2,"2 cause FE, bivariate region IID RE noncentered",stan-models/fixed-cov-2cause-fe-bivariate-iid-re-region-noncentered.stan
+3,"2 cause FE, shared region IID RE v1",stan-models/fixed-cov-2cause-fe-shared-iid-re-region-v1.stan
+4,"2 cause FE, shared region IID RE v2",stan-models/fixed-cov-2cause-fe-shared-iid-re-region-v2.stan
+5,"2 cause FE, shared region IID RE v3",stan-models/fixed-cov-2cause-fe-shared-iid-re-region-v3.stan

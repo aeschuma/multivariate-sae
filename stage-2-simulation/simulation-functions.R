@@ -27,7 +27,7 @@
 #          "one cause, region IID RE",
 #          "cause FE, separate region IID RE by cause",
 #          "cause FE, separate region IID RE by cause sum to zero",
-#          "2 cause FE, shared region IID RE",
+#          "2 cause FE, shared region IID RE vX", # different versions, v1, v2, etc i.e. X = 1, 2, ...
 #          "2 cause FE, bivariate region IID RE",
 #          "2 cause FE, bivariate region IID RE noncentered")
 #   testing: logical, TRUE if you are just testing the function for troubleshooting
@@ -88,14 +88,18 @@ simulateData <- function(R, I, C,
                      "one cause, region IID RE",
                      "cause FE, separate region IID RE by cause",
                      "cause FE, separate region IID RE by cause sum to zero",
-                     "2 cause FE, shared region IID RE",
+                     "2 cause FE, shared region IID RE v1",
+                     "2 cause FE, shared region IID RE v2",
+                     "2 cause FE, shared region IID RE v3",
                      "2 cause FE, bivariate region IID RE",
                      "2 cause FE, bivariate region IID RE noncentered"))) {
         stop("this data generating mechanism not supported")
     }
     if (length(sigma_gamma) > 1 & !(dgm %in% c("cause FE, separate region IID RE by cause",
                                                "cause FE, separate region IID RE by cause sum to zero",
-                                               "2 cause FE, shared region IID RE",
+                                               "2 cause FE, shared region IID RE v1",
+                                               "2 cause FE, shared region IID RE v2",
+                                               "2 cause FE, shared region IID RE v3",
                                                "2 cause FE, bivariate region IID RE",
                                                "2 cause FE, bivariate region IID RE noncentered"))) {
         stop(paste0("multiple sigma_gamma parameters specified which is incompatible with this data generating mechanism: ", dgm))
@@ -108,22 +112,30 @@ simulateData <- function(R, I, C,
                            "cause FE, separate region IID RE by cause sum to zero")) {
         stop("This dgm can only support 2 or more causes")
     } 
-    if (C != 2 & dgm %in% c("2 cause FE, shared region IID RE",
+    if (C != 2 & dgm %in% c("2 cause FE, shared region IID RE v1",
+                            "2 cause FE, shared region IID RE v2",
+                            "2 cause FE, shared region IID RE v3",
                             "2 cause FE, bivariate region IID RE",
                             "2 cause FE, bivariate region IID RE noncentered")) {
         stop(paste0("Only 2 causes currently supported for dgm: ", dgm))
     }
     if (length(sigma_gamma) != C & dgm %in% c("cause FE, separate region IID RE by cause",
                                               "cause FE, separate region IID RE by cause sum to zero",
-                                              "2 cause FE, shared region IID RE",
+                                              "2 cause FE, shared region IID RE v1",
+                                              "2 cause FE, shared region IID RE v2",
+                                              "2 cause FE, shared region IID RE v3",
                                               "2 cause FE, bivariate region IID RE",
                                               "2 cause FE, bivariate region IID RE noncentered")) {
         stop("This dgm needs separate sigma_gamma parameters for each cause")
     }
-    if (is.null(lambda) & dgm %in% c("2 cause FE, shared region IID RE")) {
+    if (is.null(lambda) & dgm %in% c("2 cause FE, shared region IID RE v1",
+                                     "2 cause FE, shared region IID RE v2",
+                                     "2 cause FE, shared region IID RE v3")) {
         stop(paste0("need to specify lambda for dgm: ", dgm))
     }
-    if (is.null(sigma_delta) & dgm %in% c("2 cause FE, shared region IID RE")) {
+    if (is.null(sigma_delta) & dgm %in% c("2 cause FE, shared region IID RE v1",
+                                          "2 cause FE, shared region IID RE v2",
+                                          "2 cause FE, shared region IID RE v3")) {
         stop(paste0("need to specify sigma_delta for dgm: ", dgm))
     }
     if (is.null(rho_gamma) & dgm %in% c("2 cause FE, bivariate region IID RE",
@@ -161,14 +173,18 @@ simulateData <- function(R, I, C,
         }
         gamma_rc_mat <- gamma_rc[rep(1:R, I),]
     }
-    if (dgm %in% c("2 cause FE, shared region IID RE")) {
+    if (dgm %in% c("2 cause FE, shared region IID RE v1",
+                   "2 cause FE, shared region IID RE v2",
+                   "2 cause FE, shared region IID RE v3")) {
         gamma_rc <- matrix(NA, nrow = R, ncol = C)
         for (c in 1:C) {
             gamma_rc[, c] <- rnorm(R, 0, sigma_gamma[c])
+            gamma_rc[, c] <- gamma_rc[, c] - mean(gamma_rc[, c])
         }
         gamma_rc_mat <- gamma_rc[rep(1:R, I),]
         delta <- rnorm(R, 0, sigma_delta)
-        delta_rc <- delta[rep(1:R, I)]
+        delta <- delta - mean(delta)
+        delta_mat <- delta[rep(1:R, I)]
     }
     if (dgm %in% c("2 cause FE, bivariate region IID RE",
                    "2 cause FE, bivariate region IID RE noncentered")) {
@@ -223,9 +239,11 @@ simulateData <- function(R, I, C,
                                   "cause FE, separate region IID RE by cause",
                                   "cause FE, separate region IID RE by cause sum to zero")) {
                 y[i, ] <- rmvnorm(1, beta + gamma_rc_mat[i, ], Sigma.array[i,,])
-            } else if (dgm %in% c("2 cause FE, shared region IID RE")) {
-                mu <- c(beta[1] + gamma_rc_mat[i, 1] + (lambda * delta_rc[i]),
-                        beta[2] + gamma_rc_mat[i, 2] + (1/lambda * delta_rc[i]))
+            } else if (dgm %in% c("2 cause FE, shared region IID RE v1",
+                                  "2 cause FE, shared region IID RE v2",
+                                  "2 cause FE, shared region IID RE v3")) {
+                mu <- c(beta[1] + gamma_rc_mat[i, 1] + (lambda * delta_mat[i]),
+                        beta[2] + gamma_rc_mat[i, 2] + (1/lambda * delta_mat[i]))
                 y[i, ] <- rmvnorm(1, mu, Sigma.array[i,,])
             } else if (dgm %in% c("2 cause FE, bivariate region IID RE",
                                   "2 cause FE, bivariate region IID RE noncentered")) {
@@ -277,7 +295,9 @@ simulateData <- function(R, I, C,
                            sigma_gamma = sigma_gamma,
                            gamma_rc = gamma_rc,
                            gamma_rc_mat = gamma_rc_mat)
-        } else if (dgm %in% c("2 cause FE, shared region IID RE")) {
+        } else if (dgm %in% c("2 cause FE, shared region IID RE v1",
+                              "2 cause FE, shared region IID RE v2",
+                              "2 cause FE, shared region IID RE v3")) {
             datlist <- list(N = N,
                             R = R,
                             regions = regions,
@@ -290,7 +310,9 @@ simulateData <- function(R, I, C,
                            gamma_rc = gamma_rc,
                            gamma_rc_mat = gamma_rc_mat,
                            lambda = lambda,
-                           sigma_delta = sigma_delta)
+                           sigma_delta = sigma_delta,
+                           delta_rc = delta,
+                           delta_mat = delta_mat)
         } else if (dgm %in% c("2 cause FE, bivariate region IID RE",
                               "2 cause FE, bivariate region IID RE noncentered")) {
             datlist <- list(N = N,
@@ -362,7 +384,9 @@ fitSTAN <- function(stan_model, data,
                             "one cause, region IID RE",
                             "cause FE, separate region IID RE by cause",
                             "cause FE, separate region IID RE by cause sum to zero",
-                            "2 cause FE, shared region IID RE",
+                            "2 cause FE, shared region IID RE v1",
+                            "2 cause FE, shared region IID RE v2",
+                            "2 cause FE, shared region IID RE v3",
                             "2 cause FE, bivariate region IID RE",
                             "2 cause FE, bivariate region IID RE noncentered"))) {
         stop("this STAN model is not supported")
@@ -387,8 +411,12 @@ fitSTAN <- function(stan_model, data,
         stan_file <- "stan-models/fixed-cov-fe-cause-separate-re-region.stan"
     } else if(stan_model == "cause FE, separate region IID RE by cause sum to zero") {
         stan_file <- "stan-models/fixed-cov-fe-cause-separate-re-regionS2Z.stan"
-    } else if(stan_model == "2 cause FE, shared region IID RE") {
-        stan_file <- "stan-models/fixed-cov-2cause-fe-shared-iid-re-region.stan"
+    } else if(stan_model == "2 cause FE, shared region IID RE v1") {
+        stan_file <- "stan-models/fixed-cov-2cause-fe-shared-iid-re-region-v1.stan"
+    } else if(stan_model == "2 cause FE, shared region IID RE v2") {
+        stan_file <- "stan-models/fixed-cov-2cause-fe-shared-iid-re-region-v2.stan"
+    } else if(stan_model == "2 cause FE, shared region IID RE v3") {
+        stan_file <- "stan-models/fixed-cov-2cause-fe-shared-iid-re-region-v3.stan"
     } else if(stan_model == "2 cause FE, bivariate region IID RE") {
         stan_file <- "stan-models/fixed-cov-2cause-fe-bivariate-iid-re-region.stan"
     } else if(stan_model == "2 cause FE, bivariate region IID RE noncentered") {
