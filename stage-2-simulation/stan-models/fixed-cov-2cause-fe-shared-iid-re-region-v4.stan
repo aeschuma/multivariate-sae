@@ -11,8 +11,7 @@ parameters {
     vector[R] alpha2star; // RE on region for cause 2, centered on beta2
     vector[R] deltastar; // shared RE on region
     real<lower=0> sigma_delta; // standard deviation of the shared IID REs on region
-    // vector[2] beta; // FEs on cause
-    real beta; // overall intercept
+    vector[2] beta; // FEs on cause
     real<lower=0> lambda; // scaling coefficient on shared component
 }
 transformed parameters {
@@ -30,8 +29,8 @@ transformed parameters {
     }
     
     for (i in 1:N) {
-         mu[i, 1] = beta + alpha1[regions[i]] + (lambda * delta[regions[i]]); //
-         mu[i, 2] = beta + alpha2[regions[i]] + (1/lambda * delta[regions[i]]); //
+         mu[i, 1] = beta[1] + alpha1[regions[i]] + (lambda * delta[regions[i]]); //
+         mu[i, 2] = beta[2] + alpha2[regions[i]] + (1/lambda * delta[regions[i]]); //
     }
 
     // gamma1 = alpha1 - (beta[1]);

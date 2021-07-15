@@ -36,7 +36,7 @@ library(ggplot2);
 ## TESTING THE CODE?
 ########
 
-testing <- FALSE
+testing <- TRUE
 
 ## define directories
 
@@ -65,17 +65,22 @@ models_dat <- read.csv("model-info.csv")
 ## set parameters!
 if (testing) {
     ## which model to run
-    model_number <- 4
+    model_number <- 6
     model_to_run <- models_dat$model_name[models_dat$model_number == model_number]
     
     ## data generation options
     number_of_causes <- 2
-    number_of_regions <- 15
-    number_of_replications <- 5
+    number_of_regions <- 20
+    number_of_replications <- 10
     
     ## parameters
     beta1 <- 1
     beta2 <- 2
+    beta <- c(beta1, beta2)
+    if (model_to_run %in% c("2 cause FE, shared region IID RE v3")) {
+        beta2 <- NULL
+        beta <- beta1
+    }
     rho_lower <- 0
     rho_upper <- 0.3
     sigmasq_lower <- 0.025
@@ -87,11 +92,11 @@ if (testing) {
     rho_gamma <- 0.5
     
     ## stan options
-    niter <- 500
+    niter <- 2000
     nchains <- 2
     prop_warmup <- 0.5
     max_treedepth <- 25
-    adapt_delta <- 0.95
+    adapt_delta <- 0.9
     
     ## which run
     run_number <- 1
@@ -111,7 +116,10 @@ if (testing) {
     ## parameters
     beta1 <- as.numeric(commandArgs(trailingOnly=TRUE)[5])
     beta2 <- as.numeric(commandArgs(trailingOnly=TRUE)[6])
-    if (model_to_run == "2 cause FE, shared region IID RE v2") beta3 <- 0
+    if (model_to_run %in% c("2 cause FE, shared region IID RE v3")) {
+        beta2 <- NULL
+        beta <- beta1
+    }
     rho_lower <- as.numeric(commandArgs(trailingOnly=TRUE)[7])
     rho_upper <- as.numeric(commandArgs(trailingOnly=TRUE)[8])
     sigmasq_lower <- as.numeric(commandArgs(trailingOnly=TRUE)[9])
@@ -140,7 +148,7 @@ if (testing) {
 simulated_data <- simulateData(R = number_of_regions, 
                                I = number_of_replications, 
                                C = number_of_causes,
-                               beta = c(beta1, beta2), 
+                               beta = beta, 
                                rho_lower = rho_lower, rho_upper = rho_upper, 
                                sigmasq_lower = sigmasq_lower, sigmasq_upper = sigmasq_upper,
                                sigma_gamma = c(sigma_gamma1, sigma_gamma2),
@@ -206,11 +214,6 @@ if (!testing) {
 }
 
 if (testing) {
-    # posterior estimates
-    mod_summary <- summary(stan_list$mod_stan, 
-                           pars = c("beta", "sigma_gamma", "lambda", "sigma_delta"),
-                           probs = c(0.1, 0.9))
-    mod_summary$summary
     
     # make diagnostic plots
     stan_trace(stan_list$mod_stan, pars = c("beta", "sigma_gamma", "lambda", "sigma_delta"))
@@ -234,13 +237,29 @@ if (testing) {
     mean(alpha_hat2)
     mean(delta_hat)
     par(mfrow = c(1, 3), mar = c(5, 4, 4, 2), oma = c(1, 1, .25, .25))
-    plot((simulated_data$params$gamma_rc[,1] + simulated_data$params$beta[1]) ~ alpha_hat1,
+    # plot((simulated_data$params$gamma_rc[,1] + simulated_data$params$beta[1]) ~ alpha_hat1,
+    #      xlab = "Cause 1",
+    #      ylab = "True alphas", 
+    #      main = "Posterior median of the REs",
+    #      pch = 19, col = alpha("dodgerblue", 0.5))
+    # abline(0, 1, col = "darkgreen")
+    # plot((simulated_data$params$gamma_rc[,2] + simulated_data$params$beta[2]) ~ alpha_hat2,
+    #      xlab = "Cause 2",
+    #      ylab = "True alphas", 
+    #      pch = 19, col = alpha("indianred", 0.5))
+    # abline(0, 1, col = "darkgreen")
+    # plot(simulated_data$params$delta_rc ~ delta_hat,
+    #      xlab = "Shared RE",
+    #      ylab = "True deltas", 
+    #      pch = 19, col = alpha("orchid3", 0.5))
+    # abline(0, 1, col = "darkgreen")
+    plot((simulated_data$params$gamma_rc[,1]) ~ alpha_hat1,
          xlab = "Cause 1",
          ylab = "True alphas", 
          main = "Posterior median of the REs",
          pch = 19, col = alpha("dodgerblue", 0.5))
     abline(0, 1, col = "darkgreen")
-    plot((simulated_data$params$gamma_rc[,2] + simulated_data$params$beta[2]) ~ alpha_hat2,
+    plot((simulated_data$params$gamma_rc[,2]) ~ alpha_hat2,
          xlab = "Cause 2",
          ylab = "True alphas", 
          pch = 19, col = alpha("indianred", 0.5))
