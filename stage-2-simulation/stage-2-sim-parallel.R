@@ -65,12 +65,12 @@ models_dat <- read.csv("model-info.csv")
 ## set parameters!
 if (testing) {
     ## which model to run
-    model_number <- 3
+    model_number <- 4
     model_to_run <- models_dat$model_name[models_dat$model_number == model_number]
     
     ## data generation options
     number_of_causes <- 2
-    number_of_regions <- 10
+    number_of_regions <- 15
     number_of_replications <- 5
     
     ## parameters
@@ -87,17 +87,17 @@ if (testing) {
     rho_gamma <- 0.5
     
     ## stan options
-    niter <- 1000
+    niter <- 500
     nchains <- 2
     prop_warmup <- 0.5
-    max_treedepth <- 20
-    adapt_delta <- 0.9
+    max_treedepth <- 25
+    adapt_delta <- 0.95
     
     ## which run
     run_number <- 1
     
     ## which simulation
-    sim <- 2
+    sim <- 20
 } else {
     ## which model to run
     model_number <- as.numeric(commandArgs(trailingOnly=TRUE)[1])
@@ -111,6 +111,7 @@ if (testing) {
     ## parameters
     beta1 <- as.numeric(commandArgs(trailingOnly=TRUE)[5])
     beta2 <- as.numeric(commandArgs(trailingOnly=TRUE)[6])
+    if (model_to_run == "2 cause FE, shared region IID RE v2") beta3 <- 0
     rho_lower <- as.numeric(commandArgs(trailingOnly=TRUE)[7])
     rho_upper <- as.numeric(commandArgs(trailingOnly=TRUE)[8])
     sigmasq_lower <- as.numeric(commandArgs(trailingOnly=TRUE)[9])
@@ -178,6 +179,8 @@ for (i in 1:nrow(results)) {
         tmp_param <- beta1
     } else if (tmp_param_name == "beta[2]") {
         tmp_param <- beta2
+    } else if (tmp_param_name == "beta[3]") {
+        tmp_param <- beta3
     } else if (tmp_param_name == "sigma_gamma[1]") {
         tmp_param <- sigma_gamma1
     } else if (tmp_param_name == "sigma_gamma[2]") {

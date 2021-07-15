@@ -46,7 +46,7 @@ setwd(wd)
 
 ## which models to run?
 # see model-info.csv
-model_to_run <- 3
+model_to_run <- 4
 
 ## data generating options
 number_of_causes <- 2
