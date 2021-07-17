@@ -23,23 +23,20 @@ transformed parameters {
     vector[R] delta; // shared RE on region
     
     for (rr in 1:R) {
-        alpha1[rr]  = alpha1star[rr]  * sigma_gamma[1];
-        alpha2[rr]  = alpha2star[rr]  * sigma_gamma[2];
+        alpha1[rr]  = beta[1] + alpha1star[rr]  * sigma_gamma[1];
+        alpha2[rr]  = beta[2] + alpha2star[rr]  * sigma_gamma[2];
         delta[rr]  = deltastar[rr]  * sigma_delta;
     }
     
     for (i in 1:N) {
-         mu[i, 1] = beta[1] + alpha1[regions[i]] + (lambda * delta[regions[i]]); //
-         mu[i, 2] = beta[2] + alpha2[regions[i]] + (1/lambda * delta[regions[i]]); //
+         mu[i, 1] = alpha1[regions[i]] + (delta[regions[i]] * lambda); //
+         mu[i, 2] = alpha2[regions[i]] + (delta[regions[i]] / lambda); //
     }
 
     // gamma1 = alpha1 - (beta[1]);
     // gamma2 = alpha2 - (beta[2]);
 }
 model {
-    real log_lambda;
-    log_lambda = log(lambda);
-    
     for (i in 1:N) {
         y[i] ~ multi_normal(to_vector(mu[i]), Sigma[i]); // bivariate normal observations
     }
@@ -49,9 +46,12 @@ model {
     // sum(alpha2) ~ normal(0, 0.001 * R);  // equivalent to mean(alpha2) ~ normal(0,0.001); jacobian of transformation is 1
     deltastar ~ normal(0, 1); // shared IID normal REs on region
     // sum(delta) ~ normal(0, 0.001 * R); // equivalent to mean(delta) ~ normal(0,0.001); jacobian of transformation is 1
-    sigma_gamma ~ student_t(3,0,1); // leads to a half t prior
-    sigma_delta ~ student_t(3,0,1); // leads to a half t prior
-    log_lambda ~ normal(0,1); // leads to a lognormal prior
-    target += -log_lambda; // adjust by jacobian of the transformation
+    for (rr in 1:R) {
+        (alpha1[rr] - beta[1] + (delta[rr] * lambda)) ~ normal(0, 0.001 * 2);
+        (alpha2[rr] - beta[2] + (delta[rr] / lambda)) ~ normal(0, 0.001 * 2);
+    }
+    sigma_gamma ~ student_t(3,0,5); // leads to a half t prior
+    sigma_delta ~ student_t(3,0,5); // leads to a half t prior
+    lambda ~ lognormal(0,5); // leads to a lognormal prior
     beta ~ normal(0,5); 
 }

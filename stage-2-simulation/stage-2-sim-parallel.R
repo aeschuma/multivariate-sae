@@ -36,7 +36,7 @@ library(ggplot2);
 ## TESTING THE CODE?
 ########
 
-testing <- TRUE
+testing <- FALSE
 
 ## define directories
 
@@ -50,7 +50,7 @@ savedir <- paste0(root,"Dropbox/dissertation_2/survey-csmf/results/stage-2-simul
 setwd(wd)
 
 # set number of cores to the max possible
-options(mc.cores = parallel::detectCores())
+options(mc.cores = detectCores())
 
 # load simulation functions:
 #   simulateData()
@@ -65,13 +65,13 @@ models_dat <- read.csv("model-info.csv")
 ## set parameters!
 if (testing) {
     ## which model to run
-    model_number <- 6
+    model_number <- 5
     model_to_run <- models_dat$model_name[models_dat$model_number == model_number]
     
     ## data generation options
     number_of_causes <- 2
-    number_of_regions <- 20
-    number_of_replications <- 10
+    number_of_regions <- 30
+    number_of_replications <- 15
     
     ## parameters
     beta1 <- 1
@@ -83,17 +83,17 @@ if (testing) {
     }
     rho_lower <- 0
     rho_upper <- 0.3
-    sigmasq_lower <- 0.025
-    sigmasq_upper <- 0.5
-    sigma_gamma1 <- 1.5
-    sigma_gamma2 <- 2.5
-    lambda <- 0.5
-    sigma_delta <- 1
+    sigmasq_lower <- 0.01
+    sigmasq_upper <- 0.2
+    sigma_gamma1 <- 0.1
+    sigma_gamma2 <- 0.2
+    lambda <- 3
+    sigma_delta <- 2
     rho_gamma <- 0.5
     
     ## stan options
-    niter <- 2000
-    nchains <- 2
+    niter <- 4000
+    nchains <- 1
     prop_warmup <- 0.5
     max_treedepth <- 25
     adapt_delta <- 0.9
@@ -159,9 +159,11 @@ simulated_data <- simulateData(R = number_of_regions,
                                dgm = model_to_run)
 
 # fit STAN model
+# stan_list <- fitSTAN(model_to_run, simulated_data$datlist,
+#                      niter = niter, nchains = nchains, nthin = 1, prop_warmup = prop_warmup,
+#                      max_treedepth = max_treedepth, adapt_delta = adapt_delta)
 stan_list <- fitSTAN(model_to_run, simulated_data$datlist,
-                     niter = niter, nchains = nchains, nthin = 1, prop_warmup = prop_warmup,
-                     max_treedepth = max_treedepth, adapt_delta = adapt_delta)
+                     niter = niter, nchains = nchains, nthin = 1, prop_warmup = prop_warmup)
 
 # save parameter names in order to extract and save results
 param_names <- names(simulated_data$params)

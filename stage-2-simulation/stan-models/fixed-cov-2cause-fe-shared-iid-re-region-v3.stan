@@ -9,7 +9,7 @@ parameters {
     real<lower=0> sigma_gamma[2]; // standard deviation of the IID REs on region
     vector[R] alpha1star; // RE on region for cause 1, centered on beta1
     vector[R] alpha2star; // RE on region for cause 2, centered on beta2
-    vector[R] deltastar; // shared RE on region
+    vector[R] delta; // shared RE on region
     real<lower=0> sigma_delta; // standard deviation of the shared IID REs on region
     // vector[2] beta; // FEs on cause
     real beta; // overall intercept
@@ -21,26 +21,21 @@ transformed parameters {
     // vector[R] gamma2; // RE on region for cause 2 (mean 0)
     vector[R] alpha1; // RE on region for cause 1, centered on beta1
     vector[R] alpha2; // RE on region for cause 2, centered on beta2
-    vector[R] delta; // shared RE on region
-    
+
     for (rr in 1:R) {
         alpha1[rr]  = alpha1star[rr]  * sigma_gamma[1];
         alpha2[rr]  = alpha2star[rr]  * sigma_gamma[2];
-        delta[rr]  = deltastar[rr]  * sigma_delta;
     }
     
     for (i in 1:N) {
-         mu[i, 1] = beta + alpha1[regions[i]] + (lambda * delta[regions[i]]); //
-         mu[i, 2] = beta + alpha2[regions[i]] + (1/lambda * delta[regions[i]]); //
+         mu[i, 1] = alpha1[regions[i]] + (delta[regions[i]] * lambda); //
+         mu[i, 2] = alpha2[regions[i]] + (delta[regions[i]] / lambda); //
     }
 
     // gamma1 = alpha1 - (beta[1]);
     // gamma2 = alpha2 - (beta[2]);
 }
 model {
-    real log_lambda;
-    log_lambda = log(lambda);
-    
     for (i in 1:N) {
         y[i] ~ multi_normal(to_vector(mu[i]), Sigma[i]); // bivariate normal observations
     }
@@ -48,11 +43,10 @@ model {
     // sum(alpha1) ~ normal(0, 0.001 * R);  // equivalent to mean(alpha1) ~ normal(0,0.001); jacobian of transformation is 1
     alpha2star ~ normal(0, 1); // IID normal REs on region
     // sum(alpha2) ~ normal(0, 0.001 * R);  // equivalent to mean(alpha2) ~ normal(0,0.001); jacobian of transformation is 1
-    deltastar ~ normal(0, 1); // shared IID normal REs on region
+    delta ~ normal(beta, sigma_delta); // shared IID normal REs on region
     // sum(delta) ~ normal(0, 0.001 * R); // equivalent to mean(delta) ~ normal(0,0.001); jacobian of transformation is 1
-    sigma_gamma ~ student_t(3,0,1); // leads to a half t prior
-    sigma_delta ~ student_t(3,0,1); // leads to a half t prior
-    log_lambda ~ normal(0,1); // leads to a lognormal prior
-    target += -log_lambda; // adjust by jacobian of the transformation
+    sigma_gamma ~ student_t(3,0,5); // leads to a half t prior
+    sigma_delta ~ student_t(3,0,5); // leads to a half t prior
+    lambda ~ lognormal(0,5); // leads to a lognormal prior
     beta ~ normal(0,5); 
 }

@@ -203,7 +203,7 @@ simulateData <- function(R, I, C,
             # gamma_rc[, c] <- gamma_rc[, c] - mean(gamma_rc[, c])
         }
         gamma_rc_mat <- gamma_rc[rep(1:R, I),]
-        delta <- rnorm(R, 0, sigma_delta)
+        delta <- rnorm(R, beta, sigma_delta)
         # delta <- delta - mean(delta)
         delta_mat <- delta[rep(1:R, I)]
     }
@@ -275,8 +275,8 @@ simulateData <- function(R, I, C,
                         beta[2] + gamma_rc_mat[i, 2] + (1/lambda * delta_mat[i]))
                 y[i, ] <- rmvnorm(1, mu, Sigma.array[i,,])
             } else if (dgm %in% c("2 cause FE, shared region IID RE v3")) {
-                mu <- c(beta + gamma_rc_mat[i, 1] + (lambda * delta_mat[i]),
-                        beta + gamma_rc_mat[i, 2] + (1/lambda * delta_mat[i]))
+                mu <- c(gamma_rc_mat[i, 1] + (delta_mat[i] * lambda),
+                        gamma_rc_mat[i, 2] + (delta_mat[i]) / lambda)
                 y[i, ] <- rmvnorm(1, mu, Sigma.array[i,,])
             } else if (dgm %in% c("2 cause FE, shared region IID RE v4")) {
                 mu <- c(beta[1] + gamma_rc_mat[i, 1] + (lambda * delta_mat[i]),
@@ -410,9 +410,11 @@ simulateData <- function(R, I, C,
 #       elapsed_time: total time it took to run the STAN model
 fitSTAN <- function(stan_model, data,
                     niter, nchains, nthin, prop_warmup,
-                    max_treedepth = 15, adapt_delta = 0.8,
+                    max_treedepth = NULL, adapt_delta = NULL,
                     inits = NULL) {
     # checks
+    if (!is.null(max_treedepth)) stop("stan control argument not currently working")
+    if (!is.null(adapt_delta)) stop("stan control argument not currently working")
     if (!(stan_model %in% c("cause FE only", 
                             "cause FE, region IID RE sum to zero",
                             "cause FE, region IID RE",
@@ -466,21 +468,33 @@ fitSTAN <- function(stan_model, data,
         stop("this STAN model is not yet supported")
     }
     
+    # if (is.null(inits)) {
+    #     mod_stan <- stan(file = stan_file,
+    #                      data = data,
+    #                      iter = niter, chains = nchains, thin = nthin, 
+    #                      warmup = niter*prop_warmup,
+    #                      control = list(max_treedepth = max_treedepth,
+    #                                     adapt_delta = adapt_delta))
+    # } else {
+    #     mod_stan <- stan(file = stan_file,
+    #                      data = data,
+    #                      iter = niter, chains = nchains, thin = nthin, 
+    #                      warmup = niter*prop_warmup,
+    #                      init = inits,
+    #                      control = list(max_treedepth = max_treedepth,
+    #                                     adapt_delta = adapt_delta))
+    # }
     if (is.null(inits)) {
         mod_stan <- stan(file = stan_file,
                          data = data,
                          iter = niter, chains = nchains, thin = nthin, 
-                         warmup = niter*prop_warmup,
-                         control = list(max_treedepth = max_treedepth,
-                                        adapt_delta = adapt_delta))
+                         warmup = niter*prop_warmup)
     } else {
         mod_stan <- stan(file = stan_file,
                          data = data,
                          iter = niter, chains = nchains, thin = nthin, 
                          warmup = niter*prop_warmup,
-                         init = inits,
-                         control = list(max_treedepth = max_treedepth,
-                                        adapt_delta = adapt_delta))
+                         init = inits)
     }
     stop.time <- proc.time()
     output <- list(stan_file = stan_file,
