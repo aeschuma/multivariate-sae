@@ -32,11 +32,13 @@ library(mvtnorm); library(MASS);library(gtools); library(parallel);
 library(scales); library(RColorBrewer);library(data.table);
 library(ggplot2); 
 
+if (root == "~/") library(cmdstanr);
+
 ########
 ## TESTING THE CODE?
 ########
 
-testing <- FALSE
+testing <- TRUE
 
 ## define directories
 
@@ -65,13 +67,13 @@ models_dat <- read.csv("model-info.csv")
 ## set parameters!
 if (testing) {
     ## which model to run
-    model_number <- 5
+    model_number <- 7
     model_to_run <- models_dat$model_name[models_dat$model_number == model_number]
     
     ## data generation options
     number_of_causes <- 2
-    number_of_regions <- 30
-    number_of_replications <- 15
+    number_of_regions <- 50
+    number_of_replications <- 1
     
     ## parameters
     beta1 <- 1
@@ -82,27 +84,27 @@ if (testing) {
         beta <- beta1
     }
     rho_lower <- 0
-    rho_upper <- 0.3
+    rho_upper <- 0.25
     sigmasq_lower <- 0.01
-    sigmasq_upper <- 0.2
-    sigma_gamma1 <- 0.1
-    sigma_gamma2 <- 0.2
-    lambda <- 3
-    sigma_delta <- 2
+    sigmasq_upper <- 0.1
+    sigma_gamma1 <- 1
+    sigma_gamma2 <- 1
+    lambda <- 1.5
+    sigma_delta <- 1
     rho_gamma <- 0.5
     
     ## stan options
-    niter <- 4000
-    nchains <- 1
+    niter <- 8000
+    nchains <- 2
     prop_warmup <- 0.5
     max_treedepth <- 25
-    adapt_delta <- 0.9
+    adapt_delta <- 0.95
     
     ## which run
     run_number <- 1
     
     ## which simulation
-    sim <- 20
+    sim <- 11
 } else {
     ## which model to run
     model_number <- as.numeric(commandArgs(trailingOnly=TRUE)[1])
@@ -159,11 +161,17 @@ simulated_data <- simulateData(R = number_of_regions,
                                dgm = model_to_run)
 
 # fit STAN model
-# stan_list <- fitSTAN(model_to_run, simulated_data$datlist,
-#                      niter = niter, nchains = nchains, nthin = 1, prop_warmup = prop_warmup,
-#                      max_treedepth = max_treedepth, adapt_delta = adapt_delta)
-stan_list <- fitSTAN(model_to_run, simulated_data$datlist,
-                     niter = niter, nchains = nchains, nthin = 1, prop_warmup = prop_warmup)
+if (root == "~/") {
+    stan_list <- fitSTAN(model_to_run, simulated_data$datlist,
+                         niter = niter, nchains = nchains, nthin = 1, prop_warmup = prop_warmup,
+                         adapt_delta = adapt_delta, max_treedepth = max_treedepth, 
+                         cmd = TRUE)
+} else {
+    stan_list <- fitSTAN(model_to_run, simulated_data$datlist,
+                         niter = niter, nchains = nchains, nthin = 1, prop_warmup = prop_warmup,
+                         adapt_delta = adapt_delta, max_treedepth = max_treedepth, 
+                         cmd = FALSE)
+}
 
 # save parameter names in order to extract and save results
 param_names <- names(simulated_data$params)
@@ -204,9 +212,9 @@ for (i in 1:nrow(results)) {
     results$width[i] <- posterior_qs[tmp_param_name, "90%"] - posterior_qs[tmp_param_name, "10%"]
 }
 
-stan_diags <- data.frame(n_divergent = get_num_divergent(stan_list$mod_stan),
-                         n_max_tree_exceeded = get_num_max_treedepth(stan_list$mod_stan),
-                         n_bmfi_low_chains = sum(is.finite(get_low_bfmi_chains(stan_list$mod_stan))))
+stan_diags <- data.frame(pct_divergent = get_num_divergent(stan_list$mod_stan)/(niter * prop_warmup),
+                         pct_max_tree_exceeded = get_num_max_treedepth(stan_list$mod_stan)/(niter * prop_warmup),
+                         pct_bmfi_low_chains = sum(is.finite(get_low_bfmi_chains(stan_list$mod_stan)))/nchains)
 
 if (!testing) {
     # save results
@@ -229,9 +237,13 @@ if (testing) {
     
     # plot gammas vs posterior median gamma-hat
     alpha_hat1 <- summary(stan_list$mod_stan, 
-                          pars = c("alpha1"), probs = 0.5)$summary[, "50%"]
+                          pars = c("alpha1"), probs = 0.5)$summary[, "50%"] - 
+        summary(stan_list$mod_stan, 
+                pars = c("beta[1]"), probs = 0.5)$summary[, "50%"]
     alpha_hat2 <- summary(stan_list$mod_stan, 
-                          pars = c("alpha2"), probs = 0.5)$summary[, "50%"]
+                          pars = c("alpha2"), probs = 0.5)$summary[, "50%"] - 
+        summary(stan_list$mod_stan, 
+                pars = c("beta[2]"), probs = 0.5)$summary[, "50%"]
     delta_hat <- summary(stan_list$mod_stan, 
                          pars = c("delta"), probs = 0.5)$summary[, "50%"]
 

@@ -6,3 +6,4 @@ model_number,model_name,stan_model_file
 4,"2 cause FE, shared region IID RE v2",stan-models/fixed-cov-2cause-fe-shared-iid-re-region-v2.stan
 5,"2 cause FE, shared region IID RE v3",stan-models/fixed-cov-2cause-fe-shared-iid-re-region-v3.stan
 6,"2 cause FE, shared region IID RE v4",stan-models/fixed-cov-2cause-fe-shared-iid-re-region-v4.stan
+7,"2 cause FE, shared region IID RE v5",stan-models/fixed-cov-2cause-fe-shared-iid-re-region-v5.stan

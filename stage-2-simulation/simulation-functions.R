@@ -97,6 +97,7 @@ simulateData <- function(R, I, C,
                      "2 cause FE, shared region IID RE v2",
                      "2 cause FE, shared region IID RE v3",
                      "2 cause FE, shared region IID RE v4",
+                     "2 cause FE, shared region IID RE v5",
                      "2 cause FE, bivariate region IID RE",
                      "2 cause FE, bivariate region IID RE noncentered"))) {
         stop("this data generating mechanism not supported")
@@ -107,6 +108,7 @@ simulateData <- function(R, I, C,
                                                "2 cause FE, shared region IID RE v2",
                                                "2 cause FE, shared region IID RE v3",
                                                "2 cause FE, shared region IID RE v4",
+                                               "2 cause FE, shared region IID RE v5",
                                                "2 cause FE, bivariate region IID RE",
                                                "2 cause FE, bivariate region IID RE noncentered"))) {
         stop(paste0("multiple sigma_gamma parameters specified which is incompatible with this data generating mechanism: ", dgm))
@@ -123,6 +125,7 @@ simulateData <- function(R, I, C,
                             "2 cause FE, shared region IID RE v2",
                             "2 cause FE, shared region IID RE v3",
                             "2 cause FE, shared region IID RE v4",
+                            "2 cause FE, shared region IID RE v5",
                             "2 cause FE, bivariate region IID RE",
                             "2 cause FE, bivariate region IID RE noncentered")) {
         stop(paste0("Only 2 causes currently supported for dgm: ", dgm))
@@ -133,6 +136,7 @@ simulateData <- function(R, I, C,
                                               "2 cause FE, shared region IID RE v2",
                                               "2 cause FE, shared region IID RE v3",
                                               "2 cause FE, shared region IID RE v4",
+                                              "2 cause FE, shared region IID RE v5",
                                               "2 cause FE, bivariate region IID RE",
                                               "2 cause FE, bivariate region IID RE noncentered")) {
         stop("This dgm needs separate sigma_gamma parameters for each cause")
@@ -140,13 +144,15 @@ simulateData <- function(R, I, C,
     if (is.null(lambda) & dgm %in% c("2 cause FE, shared region IID RE v1",
                                      "2 cause FE, shared region IID RE v2",
                                      "2 cause FE, shared region IID RE v3",
-                                     "2 cause FE, shared region IID RE v4")) {
+                                     "2 cause FE, shared region IID RE v4",
+                                     "2 cause FE, shared region IID RE v5")) {
         stop(paste0("need to specify lambda for dgm: ", dgm))
     }
     if (is.null(sigma_delta) & dgm %in% c("2 cause FE, shared region IID RE v1",
                                           "2 cause FE, shared region IID RE v2",
                                           "2 cause FE, shared region IID RE v3",
-                                          "2 cause FE, shared region IID RE v4")) {
+                                          "2 cause FE, shared region IID RE v4",
+                                          "2 cause FE, shared region IID RE v5")) {
         stop(paste0("need to specify sigma_delta for dgm: ", dgm))
     }
     if (is.null(rho_gamma) & dgm %in% c("2 cause FE, bivariate region IID RE",
@@ -207,7 +213,8 @@ simulateData <- function(R, I, C,
         # delta <- delta - mean(delta)
         delta_mat <- delta[rep(1:R, I)]
     }
-    if (dgm %in% c("2 cause FE, shared region IID RE v4")) {
+    if (dgm %in% c("2 cause FE, shared region IID RE v4",
+                   "2 cause FE, shared region IID RE v5")) {
         gamma_rc <- matrix(NA, nrow = R, ncol = C)
         for (c in 1:C) {
             gamma_rc[, c] <- rnorm(R, 0, sigma_gamma[c])
@@ -278,7 +285,8 @@ simulateData <- function(R, I, C,
                 mu <- c(gamma_rc_mat[i, 1] + (delta_mat[i] * lambda),
                         gamma_rc_mat[i, 2] + (delta_mat[i]) / lambda)
                 y[i, ] <- rmvnorm(1, mu, Sigma.array[i,,])
-            } else if (dgm %in% c("2 cause FE, shared region IID RE v4")) {
+            } else if (dgm %in% c("2 cause FE, shared region IID RE v4",
+                                  "2 cause FE, shared region IID RE v5")) {
                 mu <- c(beta[1] + gamma_rc_mat[i, 1] + (lambda * delta_mat[i]),
                         beta[2] + gamma_rc_mat[i, 2] + (1/lambda * delta_mat[i]))
                 y[i, ] <- rmvnorm(1, mu, Sigma.array[i,,])
@@ -335,7 +343,8 @@ simulateData <- function(R, I, C,
         } else if (dgm %in% c("2 cause FE, shared region IID RE v1",
                               "2 cause FE, shared region IID RE v2",
                               "2 cause FE, shared region IID RE v3",
-                              "2 cause FE, shared region IID RE v4")) {
+                              "2 cause FE, shared region IID RE v4",
+                              "2 cause FE, shared region IID RE v5")) {
             datlist <- list(N = N,
                             R = R,
                             regions = regions,
@@ -411,10 +420,9 @@ simulateData <- function(R, I, C,
 fitSTAN <- function(stan_model, data,
                     niter, nchains, nthin, prop_warmup,
                     max_treedepth = NULL, adapt_delta = NULL,
-                    inits = NULL) {
+                    inits = NULL,
+                    cmd = TRUE) {
     # checks
-    if (!is.null(max_treedepth)) stop("stan control argument not currently working")
-    if (!is.null(adapt_delta)) stop("stan control argument not currently working")
     if (!(stan_model %in% c("cause FE only", 
                             "cause FE, region IID RE sum to zero",
                             "cause FE, region IID RE",
@@ -428,6 +436,7 @@ fitSTAN <- function(stan_model, data,
                             "2 cause FE, shared region IID RE v2",
                             "2 cause FE, shared region IID RE v3",
                             "2 cause FE, shared region IID RE v4",
+                            "2 cause FE, shared region IID RE v5",
                             "2 cause FE, bivariate region IID RE",
                             "2 cause FE, bivariate region IID RE noncentered"))) {
         stop("this STAN model is not supported")
@@ -460,6 +469,8 @@ fitSTAN <- function(stan_model, data,
         stan_file <- "stan-models/fixed-cov-2cause-fe-shared-iid-re-region-v3.stan"
     } else if(stan_model == "2 cause FE, shared region IID RE v4") {
         stan_file <- "stan-models/fixed-cov-2cause-fe-shared-iid-re-region-v4.stan"
+    } else if(stan_model == "2 cause FE, shared region IID RE v5") {
+        stan_file <- "stan-models/fixed-cov-2cause-fe-shared-iid-re-region-v5.stan"
     } else if(stan_model == "2 cause FE, bivariate region IID RE") {
         stan_file <- "stan-models/fixed-cov-2cause-fe-bivariate-iid-re-region.stan"
     } else if(stan_model == "2 cause FE, bivariate region IID RE noncentered") {
@@ -468,33 +479,40 @@ fitSTAN <- function(stan_model, data,
         stop("this STAN model is not yet supported")
     }
     
-    # if (is.null(inits)) {
-    #     mod_stan <- stan(file = stan_file,
-    #                      data = data,
-    #                      iter = niter, chains = nchains, thin = nthin, 
-    #                      warmup = niter*prop_warmup,
-    #                      control = list(max_treedepth = max_treedepth,
-    #                                     adapt_delta = adapt_delta))
-    # } else {
-    #     mod_stan <- stan(file = stan_file,
-    #                      data = data,
-    #                      iter = niter, chains = nchains, thin = nthin, 
-    #                      warmup = niter*prop_warmup,
-    #                      init = inits,
-    #                      control = list(max_treedepth = max_treedepth,
-    #                                     adapt_delta = adapt_delta))
-    # }
-    if (is.null(inits)) {
-        mod_stan <- stan(file = stan_file,
-                         data = data,
-                         iter = niter, chains = nchains, thin = nthin, 
-                         warmup = niter*prop_warmup)
+    if (cmd == FALSE) {
+        if (is.null(inits)) {
+            mod_stan <- stan(file = stan_file,
+                             data = data,
+                             iter = niter, chains = nchains, thin = nthin, 
+                             warmup = niter*prop_warmup,
+                             control = list(max_treedepth = max_treedepth,
+                                            adapt_delta = adapt_delta))
+        } else {
+            mod_stan <- stan(file = stan_file,
+                             data = data,
+                             iter = niter, chains = nchains, thin = nthin, 
+                             warmup = niter*prop_warmup,
+                             init = inits,
+                             control = list(max_treedepth = max_treedepth,
+                                            adapt_delta = adapt_delta))
+        }
     } else {
-        mod_stan <- stan(file = stan_file,
-                         data = data,
-                         iter = niter, chains = nchains, thin = nthin, 
-                         warmup = niter*prop_warmup,
-                         init = inits)
+        if (is.null(inits)) {
+            cmd_mod <- cmdstan_model(stan_file = stan_file)
+            fit <- cmd_mod$sample(data = data,
+                                  iter_warmup = niter*prop_warmup, iter_sampling = niter*(1-prop_warmup),
+                                  chains = nchains, thin = nthin,
+                                  adapt_delta = adapt_delta, max_treedepth = max_treedepth)
+            mod_stan <- rstan::read_stan_csv(fit$output_files())
+        } else {
+            cmd_mod <- cmdstan_model(stan_file = stan_file)
+            fit <- cmd_mod$sample(data = data,
+                                  iter_warmup = niter*prop_warmup, iter_sampling = niter*(1-prop_warmup),
+                                  chains = nchains, thin = nthin,
+                                  adapt_delta = adapt_delta, max_treedepth = max_treedepth,
+                                  init = inits)
+            mod_stan <- rstan::read_stan_csv(fit$output_files())
+        }
     }
     stop.time <- proc.time()
     output <- list(stan_file = stan_file,

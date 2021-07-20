@@ -86,4 +86,7 @@ if (!testing) {
     sapply(c(resfiles, diagfiles), unlink)
     setwd(paste0(savedir,"/../../out/stage-2-simulation"))
     sapply(list.files(), unlink)
+    
+    setwd(root)
+    system("rm -f /home/users/aeschuma/qsub-compile-sims*")
 }
