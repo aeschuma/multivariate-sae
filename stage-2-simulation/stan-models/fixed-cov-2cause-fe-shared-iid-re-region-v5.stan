@@ -37,6 +37,6 @@ model {
     delta ~ normal(0, sigma_delta); // shared IID normal REs on region
     sigma_total ~ student_t(7,0,1); // leads to a half t prior
     theta ~ dirichlet(rep_vector(1, 3));
-    lambda ~ lognormal(log(1.5), 0.01); // leads to a lognormal prior
+    lambda ~ lognormal(log(1.5), 0.001); // leads to a lognormal prior
     beta ~ normal(0,5); 
 }

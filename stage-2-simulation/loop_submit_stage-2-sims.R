@@ -46,12 +46,12 @@ setwd(wd)
 
 ## which models to run?
 # see model-info.csv
-model_to_run <- 5
+model_to_run <- 7
 
 ## data generating options
 number_of_causes <- 2
-number_of_regions <- 50
-number_of_replications <- 50
+number_of_regions <- 8
+number_of_replications <- 1
 
 ## parameters (TODO: currently must specify all of them, but not all models run will use all parameters)
 ## perhaps want to manually set the parameters in the run info CSV ahead of time and then just pull them from there?
@@ -62,9 +62,9 @@ rho_lower <- -0.2
 rho_upper <- 0.2
 sigmasq_lower <- 0.05
 sigmasq_upper <- 0.5
-sigma_gamma1 <- 1.5
-sigma_gamma2 <- 2.5
-lambda <- 0.5
+sigma_gamma1 <- 1
+sigma_gamma2 <- 1
+lambda <- 1.5
 sigma_delta <- 1
 rho_gamma <- 0.5
 

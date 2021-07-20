@@ -38,7 +38,7 @@ if (root == "~/") library(cmdstanr);
 ## TESTING THE CODE?
 ########
 
-testing <- TRUE
+testing <- FALSE
 
 ## define directories
 
@@ -72,7 +72,7 @@ if (testing) {
     
     ## data generation options
     number_of_causes <- 2
-    number_of_regions <- 50
+    number_of_regions <- 8
     number_of_replications <- 1
     
     ## parameters
