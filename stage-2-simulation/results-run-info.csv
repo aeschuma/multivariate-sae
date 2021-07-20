@@ -1,7 +1,6 @@
-"run_number","model_number","number_of_causes","number_of_regions","number_of_replications","beta1","beta2","rho_lower","rho_upper","sigmasq_lower","sigmasq_upper","sigma_gamma1","sigma_gamma2","lambda","sigma_delta","rho_gamma","niter","nchains","prop_warmup","max_treedepth","adapt_delta","nsims"
+run_number,model_number,number_of_causes,number_of_regions,number_of_replications,beta1,beta2,rho_lower,rho_upper,sigmasq_lower,sigmasq_upper,sigma_gamma1,sigma_gamma2,lambda,sigma_delta,rho_gamma,niter,nchains,prop_warmup,max_treedepth,adapt_delta,nsims
 0,1,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
 1,0,2,8,1,1,2,-0.2,0.2,0.05,0.5,1.5,2.5,0.5,NA,0.25,8000,3,0.5,25,0.9,1000
 2,2,2,8,1,1,2,-0.2,0.2,0.05,0.5,1.5,2.5,0.5,NA,0.5,8000,2,0.5,20,0.8,1000
 3,3,2,8,1,1,2,-0.2,0.2,0.05,0.5,1.5,2.5,0.5,1,0.5,10000,2,0.5,25,0.95,1000
 4,4,2,8,1,1,2,-0.2,0.2,0.05,0.5,1.5,2.5,0.5,1,0.5,10000,2,0.5,25,0.95,1000
-5,5,2,50,50,1,2,-0.2,0.2,0.05,0.5,1.5,2.5,0.5,1,0.5,10000,2,0.5,25,0.95,1000
