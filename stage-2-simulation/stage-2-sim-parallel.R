@@ -38,7 +38,7 @@ if (root == "~/") library(cmdstanr);
 ## TESTING THE CODE?
 ########
 
-testing <- TRUE
+testing <- FALSE
 
 ## define directories
 
