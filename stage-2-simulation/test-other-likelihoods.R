@@ -50,8 +50,8 @@ options(mc.cores = detectCores())
 
 ## data generation options
 number_of_causes <- 2
-number_of_regions <- 20
-number_of_replications <- 10
+number_of_regions <- 40
+number_of_replications <- 20
 
 ## parameters
 beta1 <- 1
@@ -68,11 +68,11 @@ sigmasq_lower <- 0.01
 sigmasq_upper <- 0.1
 
 ## stan options
-niter <- 1000
-nchains <- 1
+niter <- 3000
+nchains <- 2
 prop_warmup <- 0.5
-max_treedepth <- 15
-adapt_delta <- 0.8
+max_treedepth <- 25
+adapt_delta <- 0.95
     
 # simulate data
 N <- number_of_regions * number_of_replications * number_of_causes
@@ -81,7 +81,7 @@ dat_frame <- expand_grid(reg = 1:number_of_regions,
                          cause = 1:number_of_causes)
 
 sigmasqs <- runif(N, sqrt(sigmasq_lower), sqrt(sigmasq_upper))
-epsilons <- rnorm(N, 0, sigmasqs)
+epsilons <- rnorm(N, 0, sqrt(sigmasqs))
 
 dat_frame %<>% mutate(beta = beta[cause],
                       epsilon = epsilons)
@@ -106,28 +106,28 @@ dat_frame %<>% left_join(gamma1_dat) %>% left_join(gamma2_dat) %>% left_join(del
            y_norm = beta + gamma1 + gamma2 + delta_mod + epsilon,
            y_pois = rpois(N, exp(beta + gamma1 + gamma2 + delta_mod)))
 
+dat_list <- list(N = nrow(dat_frame),
+                 R = number_of_regions,
+                 regions = dat_frame$reg,
+                 cause1ind = as.numeric(dat_frame$cause == 1),
+                 cause2ind = as.numeric(dat_frame$cause == 2),
+                 Sigma = sqrt(sigmasqs),
+                 y = dat_frame$y_norm)
 
+# run cmdstan
+stan_file <- "stan-models/univariatenorm-fixed-var-2cause-fe-shared-iid-re-region-v5.stan"
 
-# fit STAN model
-if (root == "~/") {
-    stan_list <- fitSTAN(model_to_run, simulated_data$datlist,
-                         niter = niter, nchains = nchains, nthin = 1, prop_warmup = prop_warmup,
-                         adapt_delta = adapt_delta, max_treedepth = max_treedepth, 
-                         cmd = TRUE)
-} else {
-    stan_list <- fitSTAN(model_to_run, simulated_data$datlist,
-                         niter = niter, nchains = nchains, nthin = 1, prop_warmup = prop_warmup,
-                         adapt_delta = adapt_delta, max_treedepth = max_treedepth, 
-                         cmd = FALSE)
-}
+cmd_mod <- cmdstan_model(stan_file = stan_file)
+fit <- cmd_mod$sample(data = dat_list,
+                      iter_warmup = niter*prop_warmup, iter_sampling = niter*(1-prop_warmup),
+                      chains = nchains, thin = 1,
+                      adapt_delta = adapt_delta, max_treedepth = max_treedepth)
+mod_stan <- rstan::read_stan_csv(fit$output_files())
 
-# save parameter names in order to extract and save results
-param_names <- names(simulated_data$params)
-params_to_extract <- param_names[!(param_names %in% c(grep("gamma_", param_names, value = TRUE),
-                                                      grep("delta_", param_names, value = TRUE)))]
+params_to_extract <- c("beta", "sigma_gamma", "sigma_delta", "lambda")
 
 # summaries
-mod_summary <- summary(stan_list$mod_stan,
+mod_summary <- summary(mod_stan,
                        pars = params_to_extract,
                        probs = c(0.1, 0.5, 0.9))
 posterior_qs <- mod_summary$summary[, c("10%", "50%", "90%")]
@@ -160,75 +160,45 @@ for (i in 1:nrow(results)) {
     results$width[i] <- posterior_qs[tmp_param_name, "90%"] - posterior_qs[tmp_param_name, "10%"]
 }
 
-stan_diags <- data.frame(pct_divergent = get_num_divergent(stan_list$mod_stan)/(niter * prop_warmup),
-                         pct_max_tree_exceeded = get_num_max_treedepth(stan_list$mod_stan)/(niter * prop_warmup),
-                         pct_bmfi_low_chains = sum(is.finite(get_low_bfmi_chains(stan_list$mod_stan)))/nchains)
+stan_diags <- data.frame(pct_divergent = get_num_divergent(mod_stan)/(niter * prop_warmup),
+                         pct_max_tree_exceeded = get_num_max_treedepth(mod_stan)/(niter * prop_warmup),
+                         pct_bmfi_low_chains = sum(is.finite(get_low_bfmi_chains(mod_stan)))/nchains)
 
-if (!testing) {
-    # save results
-    setwd(savedir)
-    saveRDS(results, paste0("tmp/results_run-", run_number, "_sim-", sim, ".rds"))
-    saveRDS(stan_diags, paste0("tmp/standiags_run-", run_number, "_sim-", sim, ".rds"))
-}
+stan_diags
+results
 
-if (testing) {
-    
-    # make diagnostic plots
-    stan_trace(stan_list$mod_stan, pars = c("beta", "sigma_gamma", "lambda", "sigma_delta"))
-    pairs(stan_list$mod_stan, pars = c("beta", "sigma_gamma", "lambda", "sigma_delta"))
-    # mcmc_areas(as.matrix(stan_list$mod_stan),
-    #            pars = c("beta[1]", "beta[2]", 
-    #                     "sigma_gamma[1]", "sigma_gamma[2]",
-    #                     "lambda", "sigma_delta"),
-    #            prob = 0.8)
-    mcmc_nuts_energy(nuts_params(stan_list$mod_stan))
-    
-    # plot gammas vs posterior median gamma-hat
-    alpha_hat1 <- summary(stan_list$mod_stan, 
-                          pars = c("alpha1"), probs = 0.5)$summary[, "50%"] - 
-        summary(stan_list$mod_stan, 
-                pars = c("beta[1]"), probs = 0.5)$summary[, "50%"]
-    alpha_hat2 <- summary(stan_list$mod_stan, 
-                          pars = c("alpha2"), probs = 0.5)$summary[, "50%"] - 
-        summary(stan_list$mod_stan, 
-                pars = c("beta[2]"), probs = 0.5)$summary[, "50%"]
-    delta_hat <- summary(stan_list$mod_stan, 
-                         pars = c("delta"), probs = 0.5)$summary[, "50%"]
-    
-    mean(alpha_hat1)
-    mean(alpha_hat2)
-    mean(delta_hat)
-    par(mfrow = c(1, 3), mar = c(5, 4, 4, 2), oma = c(1, 1, .25, .25))
-    # plot((simulated_data$params$gamma_rc[,1] + simulated_data$params$beta[1]) ~ alpha_hat1,
-    #      xlab = "Cause 1",
-    #      ylab = "True alphas", 
-    #      main = "Posterior median of the REs",
-    #      pch = 19, col = alpha("dodgerblue", 0.5))
-    # abline(0, 1, col = "darkgreen")
-    # plot((simulated_data$params$gamma_rc[,2] + simulated_data$params$beta[2]) ~ alpha_hat2,
-    #      xlab = "Cause 2",
-    #      ylab = "True alphas", 
-    #      pch = 19, col = alpha("indianred", 0.5))
-    # abline(0, 1, col = "darkgreen")
-    # plot(simulated_data$params$delta_rc ~ delta_hat,
-    #      xlab = "Shared RE",
-    #      ylab = "True deltas", 
-    #      pch = 19, col = alpha("orchid3", 0.5))
-    # abline(0, 1, col = "darkgreen")
-    plot((simulated_data$params$gamma_rc[,1]) ~ alpha_hat1,
-         xlab = "Cause 1",
-         ylab = "True alphas", 
-         main = "Posterior median of the REs",
-         pch = 19, col = alpha("dodgerblue", 0.5))
-    abline(0, 1, col = "darkgreen")
-    plot((simulated_data$params$gamma_rc[,2]) ~ alpha_hat2,
-         xlab = "Cause 2",
-         ylab = "True alphas", 
-         pch = 19, col = alpha("indianred", 0.5))
-    abline(0, 1, col = "darkgreen")
-    plot(simulated_data$params$delta_rc ~ delta_hat,
-         xlab = "Shared RE",
-         ylab = "True deltas", 
-         pch = 19, col = alpha("orchid3", 0.5))
-    abline(0, 1, col = "darkgreen")
-}
+# make diagnostic plots
+stan_trace(mod_stan, pars = c("beta", "sigma_gamma", "lambda", "sigma_delta"))
+pairs(mod_stan, pars = c("beta", "sigma_gamma", "lambda", "sigma_delta"))
+# mcmc_areas(as.matrix(mod_stan),
+#            pars = c("beta[1]", "beta[2]", 
+#                     "sigma_gamma[1]", "sigma_gamma[2]",
+#                     "lambda", "sigma_delta"),
+#            prob = 0.8)
+mcmc_nuts_energy(nuts_params(mod_stan))
+
+# plot gammas vs posterior median gamma-hat
+gamma_hat1 <- summary(mod_stan, 
+                      pars = c("gamma1"), probs = 0.5)$summary[, "50%"] 
+gamma_hat2 <- summary(mod_stan, 
+                      pars = c("gamma2"), probs = 0.5)$summary[, "50%"] 
+delta_hat <- summary(mod_stan, 
+                     pars = c("delta"), probs = 0.5)$summary[, "50%"]
+
+par(mfrow = c(1, 3), mar = c(5, 4, 4, 2), oma = c(1, 1, .25, .25))
+plot(gamma1 ~ gamma_hat1,
+     xlab = "Cause 1",
+     ylab = "True gammas", 
+     main = "Posterior median of the REs",
+     pch = 19, col = alpha("dodgerblue", 0.5))
+abline(0, 1, col = "darkgreen")
+plot(gamma2 ~ gamma_hat2,
+     xlab = "Cause 2",
+     ylab = "True gammas", 
+     pch = 19, col = alpha("indianred", 0.5))
+abline(0, 1, col = "darkgreen")
+plot(delta ~ delta_hat,
+     xlab = "Shared RE",
+     ylab = "True deltas", 
+     pch = 19, col = alpha("orchid3", 0.5))
+abline(0, 1, col = "darkgreen")

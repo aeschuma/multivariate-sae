@@ -38,7 +38,7 @@ if (root == "~/") library(cmdstanr);
 ## TESTING THE CODE?
 ########
 
-testing <- FALSE
+testing <- TRUE
 
 ## define directories
 
@@ -94,7 +94,7 @@ if (testing) {
     rho_gamma <- 0.5
     
     ## stan options
-    niter <- 8000
+    niter <- 10000
     nchains <- 2
     prop_warmup <- 0.5
     max_treedepth <- 25
@@ -104,7 +104,7 @@ if (testing) {
     run_number <- 1
     
     ## which simulation
-    sim <- 11
+    sim <- 110
 } else {
     ## which model to run
     model_number <- as.numeric(commandArgs(trailingOnly=TRUE)[1])
