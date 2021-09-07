@@ -89,8 +89,8 @@ table(tmpdat$qhprov)
 table(tmpdat$agecat, tmpdat$yod)
 table(tmpdat$agecat, tmpdat$icd10_condensed)
 table(tmpdat$agecat, tmpdat$qhprov)
-table(tmpdat$qv305z, tmpdat$icd10_condensed)
-table(tmpdat$qv305z, tmpdat$qhprov)
+table(tmpdat$yod, tmpdat$icd10_condensed)
+table(tmpdat$yod, tmpdat$qhprov)
 table(tmpdat$icd10_condensed, tmpdat$qhprov)
 
 # combine deaths and alives
@@ -146,13 +146,13 @@ mult.prem_noall0 <- svy_vglm(cbind(alive, dead) ~ 1,
 # summer model
 dat_ind_wide$year <- as.character(dat_ind_wide$yod)
 dat_ind_wide$strata <- as.character(dat_ind_wide$qhtype)
-summer.mod <- getDirect(births = dat_ind_wide,
-                        years = c("1386","1387","1388","1389"),
-                        regionVar = NULL,
-                        weightsVar = "qhweight", 
-                        clusterVar = "~qhclust", 
-                        ageVar = NULL,
-                        timeVar = NULL)
+# summer.mod <- getDirect(births = dat_ind_wide,
+#                         years = c("1386","1387","1388","1389"),
+#                         regionVar = NULL,
+#                         weightsVar = "qhweight", 
+#                         clusterVar = "~qhclust", 
+#                         ageVar = NULL,
+#                         timeVar = NULL)
 
 #-------------
 # Aggregated data

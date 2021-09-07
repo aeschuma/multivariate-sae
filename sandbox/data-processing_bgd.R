@@ -74,7 +74,7 @@ mod.dat.all %<>% filter(obsmonth >= v008 - 60)
 ## Collapse age groups for multinomial model (so there are no zero death age-cause combos)
 mod.dat.all$age_old <- mod.dat.all$age
 mod.dat.all$age <- ifelse(mod.dat.all$age_old %in% c("12-23", "24-35", "36-47", "48-59"), "12-59", "0-11")
-table(mod.dat.all$age)
+table(mod.dat.all$age)   
 
 # cause groups
 table(vadat$qfinicd)
