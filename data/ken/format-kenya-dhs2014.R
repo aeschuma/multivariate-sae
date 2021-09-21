@@ -136,37 +136,3 @@ rownames(admin1.mat) <- 1:nrow(admin1.mat)
 # save data
 save(dat, poly.adm1, admin1.mat, node.info, 
      file = "/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/haz-waz-kenDHS2014.rda")
-
-# random modeling tests
-
-# library(survey); library(svyVGAM);
-# 
-# my.svydesign <- survey::svydesign(ids = ~ cluster,
-#                                   strata = ~ strata, nest = T, weights = ~weights,
-#                                   data = dat.tmp)
-# 
-# vars.svymean <- svyvar(~HAZ + WAZ, my.svydesign)
-# means.svymean <- svymean(~HAZ + WAZ, my.svydesign)
-# V.svymean <- vcov(svymean(~HAZ + WAZ, my.svydesign))
-# D <- diag(sqrt(diag(V.svymean)))
-# DInv <- solve(D)
-# corr <- DInv %*% V.svymean %*% DInv
-# 
-# # compare with svy_vglm
-# tmp.mod <- svy_vglm(cbind(HAZ, WAZ) ~ 1,
-#                     family = binormal,
-#                     design = my.svydesign)
-# 
-# means.vglm <- coef(tmp.mod)[1:2]
-# means.vglm
-# means.svymean
-# 
-# V.vglm <- vcov(tmp.mod)[1:2, 1:2]
-# V.vglm
-# V.svymean
-# 
-# vars.vglm <- exp(coef(tmp.mod)[3:4])
-# corr.vglm <- rhobitlink(coef(tmp.mod)[5], inverse = TRUE)
-# vars.vglm
-# corr.vglm
-# vars.svymean
