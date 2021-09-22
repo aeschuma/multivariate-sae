@@ -107,7 +107,8 @@ if (testing) {
 }
 
 # set the model to run
-my_model <- models_dat %>% filter(model_number == m_number) %>% select(-1) %>% slice(1) %>% unlist()
+my_model <- models_dat[models_dat$model_number == m_number,]
+my_model <- my_model %>% select(-1) %>% slice(1) %>% unlist()
 
 # load data
 dgm_file <- read_csv("dgm-info.csv")
