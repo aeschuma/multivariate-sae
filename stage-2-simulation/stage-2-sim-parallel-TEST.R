@@ -31,9 +31,9 @@ if (root == "/home/users/aeschuma/") {
     library(Rcpp); library(StanHeaders); library(BH); library(rstan); library(bayesplot); 
 }
 library(mvtnorm); library(MASS);library(gtools); library(parallel);
-library(scales); library(RColorBrewer); library(ggplot2); library(tidyr); library(spdep); 
-library(geosphere); library(haven); library(knitr); library(kableExtra); library(magrittr); 
-library(rgdal); library(INLA); library(viridis);
+library(scales); library(RColorBrewer); library(ggplot2); library(tidyr);
+library(haven); library(knitr); library(kableExtra); library(magrittr); 
+library(rgdal); library(INLA);
 
 if (root == "~/") library(cmdstanr);
 
