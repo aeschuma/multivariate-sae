@@ -1,4 +1,6 @@
-model_number,stan_model_file
-0,NA
-1,stan-models/nonshared-bym2.stan
-2,stan-models/shared-bym2-coregionalization.stan
+model_number,stan_model_file,rho_beta_1,rho_beta_2,sigma_normal_sd
+0,NA,NA,NA,NA
+1,stan-models/nonshared-bym2.stan,1,1,1
+2,stan-models/shared-bym2-coregionalization.stan,1,1,1
+3,stan-models/nonshared-bym2.stan,3,3,1
+4,stan-models/shared-bym2-coregionalization.stan,3,3,1

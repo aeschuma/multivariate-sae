@@ -25,11 +25,10 @@ sim.Q <- function(Q){
 # output:
 #   datlist: list of data to be used as input to various STAN models
 #   params: values of parameters used in the simulation
-simulateData <- function(dgm, node_info, Amat, scaling_factor, seed, testing = FALSE) {
+simulateData <- function(dgm, Amat, scaling_factor, seed, testing = FALSE) {
     
     # testing
     if (testing == TRUE) {
-        node_info <- node.info
         Amat <- admin1.mat
         scaling_factor <- scaling_factor
         dgm <- 1
@@ -42,7 +41,7 @@ simulateData <- function(dgm, node_info, Amat, scaling_factor, seed, testing = F
     dgm_file <- read_csv("dgm-info.csv")
     my_dgm <- dgm_file %>% filter(dgm_number == dgm) %>% select(-1) %>% slice(1) %>% unlist()
     data_based <- as.numeric(my_dgm["data_based"])
-    my_dgm <- my_dgm[-1]
+    my_dgm <- my_dgm[-1:-2]
     
     # check parameter model and set
     if (data_based == 1 & length(unique(my_dgm)) != 1) stop("Not all parameters are from the same data-based model")
@@ -130,8 +129,17 @@ simulateData <- function(dgm, node_info, Amat, scaling_factor, seed, testing = F
                     rho_beta_1 = NA,
                     rho_beta_2 = NA,
                     sigma_normal_sd = NA)
+    
+    RE_list <- list(u_1 = u_1,
+                    u_2 = u_2,
+                    v_1 = v_1,
+                    v_2 = v_2,
+                    convolved_re_1 = convolved_re_1,
+                    convolved_re_2 = convolved_re_2)
+    
     params <- list(V_pars = V_pars,
-                   mean_pars = mean_pars)
+                   mean_pars = mean_pars,
+                   REs = RE_list)
     # output
     output <- list(datlist = datlist,
                    params = params)
@@ -166,8 +174,8 @@ fitSTAN <- function(stan_file, data,
                     inits = NULL,
                     cmd = TRUE) {
     # checks
-    if (!(stan_file %in% c("nonshared-bym2.stan", 
-                           "shared-bym2-coregionalization.stan"))) {
+    if (!(stan_file %in% c("stan-models/nonshared-bym2.stan", 
+                           "stan-models/shared-bym2-coregionalization.stan"))) {
         stop("this STAN model is not supported")
     }
     
