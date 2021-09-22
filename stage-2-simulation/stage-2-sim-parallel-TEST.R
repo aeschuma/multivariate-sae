@@ -32,7 +32,7 @@ if (root == "/home/users/aeschuma/") {
 }
 library(mvtnorm); library(MASS);library(gtools); library(parallel);
 library(scales); library(RColorBrewer); library(ggplot2); library(tidyr);
-library(haven); library(knitr); library(INLA);
+library(haven); library(knitr); library(INLA); library(readr);
 
 if (root == "~/") library(cmdstanr);
 
