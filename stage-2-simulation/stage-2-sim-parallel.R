@@ -31,7 +31,7 @@ if (root == "/home/users/aeschuma/") {
     library(Rcpp); library(StanHeaders); library(BH); library(rstan); library(bayesplot); 
 }
 library(mvtnorm); library(MASS);library(gtools); library(parallel);
-library(scales); library(RColorBrewer); library(ggplot2); library(tidyr);
+library(scales); library(RColorBrewer); library(ggplot2); library(tidyr); library(dplyr);
 library(haven); library(knitr); library(INLA); library(readr);
 
 if (root == "~/") library(cmdstanr);
@@ -107,12 +107,11 @@ if (testing) {
 }
 
 # set the model to run
-my_model <- models_dat[models_dat$model_number == m_number,]
-my_model <- my_model %>% select(-1) %>% slice(1) %>% unlist()
+my_model <- models_dat %>% dplyr::filter(model_number == m_number) %>% dplyr::select(-1) %>% dplyr::slice(1) %>% unlist()
 
 # load data
 dgm_file <- read_csv("dgm-info.csv")
-my_dgm <- dgm_file %>% filter(dgm_number == dgm) %>% select(-1) %>% slice(1) %>% unlist()
+my_dgm <- dgm_file %>% dplyr::filter(dgm_number == dgm) %>% dplyr::select(-1) %>% dplyr::slice(1) %>% unlist()
 load(my_dgm["geo_data"])
 
 # Simulate data ####
