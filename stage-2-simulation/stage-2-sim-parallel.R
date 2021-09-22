@@ -1,5 +1,7 @@
 rm(list=ls())
 
+# Preamble ####
+
 ## set the root depending on operating system
 root <- ifelse(Sys.info()[1]=="Darwin","~/",
                ifelse(Sys.info()[1]=="Windows","P:/",
@@ -26,19 +28,17 @@ if (root == "/home/students/aeschuma/") {
     library(BH,lib.loc = paste0(root,"R/x86_64-pc-linux-gnu-library/3.6"))
     library(rstan,lib.loc = paste0(root,"R/x86_64-pc-linux-gnu-library/3.6"));
 } else {
-    library(Rcpp); library(StanHeaders); library(BH); library(rstan);library(bayesplot);
+    library(Rcpp); library(StanHeaders); library(BH); library(rstan); library(bayesplot); 
 }
 library(mvtnorm); library(MASS);library(gtools); library(parallel);
-library(scales); library(RColorBrewer);library(data.table);
-library(ggplot2); 
+library(scales); library(RColorBrewer); library(ggplot2); library(tidyverse); library(spdep); 
+library(geosphere); library(haven); library(knitr); library(kableExtra); library(magrittr); 
+library(rgdal); library(INLA); library(viridis);
 
 if (root == "~/") library(cmdstanr);
 
-########
 ## TESTING THE CODE?
-########
-
-testing <- FALSE
+testing <- TRUE
 
 ## define directories
 
@@ -54,17 +54,19 @@ setwd(wd)
 # set number of cores to the max possible
 options(mc.cores = detectCores())
 
+# Load data and functions ####
+
 # load simulation functions:
 #   simulateData()
 #   fitSTAN()
 source("simulation-functions.R")
 
 # load model csv to load which model we're running
-models_dat <- read.csv("model-info.csv")
+models_dat <- read_csv("model-info.csv")
 # only if need to rewrite csv to get rid of warning message for incomplete final line
 # write.csv(models_dat, file = "model-info.csv", row.names = FALSE)
 
-## set parameters!
+# Set parameters! ####
 if (testing) {
     ## which model to run
     model_number <- 7
@@ -145,6 +147,10 @@ if (testing) {
     ## which simulation
     sim <- as.numeric(commandArgs(trailingOnly=TRUE)[22])
 }
+
+# load data
+geo_data <- "/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/haz-waz-kenDHS2014.rda"
+load(geo_data)
 
 # simulate data
 simulated_data <- simulateData(R = number_of_regions, 

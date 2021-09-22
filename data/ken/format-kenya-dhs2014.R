@@ -54,7 +54,7 @@ proj4string(poly.adm1)
 
 # adjacency matrix
 admin1.mat <- poly2nb(SpatialPolygons(poly.adm1@polygons))
-admin1.mat <- nb2mat(admin1.mat, zero.policy = TRUE)
+admin1.mat <- nb2mat(admin1.mat, zero.policy = TRUE, style = "B")
 colnames(admin1.mat) <- 
     rownames(admin1.mat) <- paste0("admin1_",
                                    1:dim(admin1.mat)[1])
@@ -127,6 +127,25 @@ for (i in 1:n_regions) {
 }
 node.info <- list(node1 = node1, node2 = node2, n_edges = n_edges)
 
+# scaling factor for ICAR models
+
+## make INLA adjacency matrix
+adj.matrix <- sparseMatrix(i=node.info$node1,j=node.info$node2,x=1,symmetric=TRUE)
+
+## The ICAR precision matrix (note! This is singular)
+Q <- Diagonal(n_regions, rowSums(adj.matrix)) - adj.matrix
+
+## Add a small jitter to the diagonal for numerical stability (optional but recommended)
+Q_pert <- Q + Diagonal(n_regions) * max(diag(Q)) * sqrt(.Machine$double.eps)
+
+## Compute the diagonal elements of the covariance matrix subject to the 
+## constraint that the entries of the ICAR sum to zero.
+## See the inla.qinv function help for further details.
+Q_inv <- inla.qinv(Q_pert, constr=list(A = matrix(1,1,n_regions),e=0))
+
+## Compute the geometric mean of the variances, which are on the diagonal of Q_inv
+scaling_factor <- exp(mean(log(diag(Q_inv))))
+
 # format data
 dat <- dat.tmp
 dat <- dat[order(dat$admin1),]
@@ -134,5 +153,5 @@ colnames(admin1.mat) <- 1:ncol(admin1.mat)
 rownames(admin1.mat) <- 1:nrow(admin1.mat)
 
 # save data
-save(dat, poly.adm1, admin1.mat, node.info, 
+save(dat, poly.adm1, admin1.mat, node.info, scaling_factor,
      file = "/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/haz-waz-kenDHS2014.rda")
