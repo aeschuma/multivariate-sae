@@ -28,7 +28,7 @@ if (root == "P:/") {
 
 ## testing?
 testing_loop <- FALSE
-testing_script <- FALSE
+testing_script <- TRUE
 
 ## define directories
 
@@ -60,6 +60,7 @@ adapt_delta <- 0.9
 number_of_sims <- 5
 
 ## loop and submit jobs
+running_total <- 0
 for (a in model_to_run) {
     for (b in dgm_to_run) {
         for (c in  niter) {
@@ -83,7 +84,7 @@ for (a in model_to_run) {
                             }
                             
                             for (s in  1:number_of_sims) {
-                                
+                                running_total <- running_total + 1
                                 if (testing_script) {
                                     script <- "qsub-stage-2-sims-TEST.sh"
                                 } else {
@@ -99,16 +100,8 @@ for (a in model_to_run) {
                                               ",g=",g,
                                               ",rr=",run_number,
                                               ",s=",s,
-                                              " -N s2sim_",
-                                              a,"_",
-                                              b,"_",
-                                              c,"_",
-                                              d,"_",
-                                              e, "_",
-                                              f, "_",
-                                              g,"_",
-                                              run_number, "_",
-                                              s,
+                                              ",t=",running_total,
+                                              " -N s2sim_",running_total,
                                               " ",
                                               script)
                                 
