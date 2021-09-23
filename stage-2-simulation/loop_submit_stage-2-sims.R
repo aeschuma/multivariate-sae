@@ -57,7 +57,7 @@ max_treedepth <- 100
 adapt_delta <- 0.9
 
 ## Simulation number
-number_of_sims <- 3
+number_of_sims <- 500
 
 ## loop and submit jobs
 running_total <- 0
