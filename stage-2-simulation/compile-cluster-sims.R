@@ -3,7 +3,7 @@ rm(list=ls())
 ## set the root depending on operating system
 root <- ifelse(Sys.info()[1]=="Darwin","~/",
                ifelse(Sys.info()[1]=="Windows","P:/",
-                      ifelse(Sys.info()[1]=="Linux","/home/students/aeschuma/",
+                      ifelse(Sys.info()[1]=="Linux","/home/users/aeschuma/",
                              stop("Unknown operating system"))))
 
 ## the following code makes rstan work on the Box server and the cluster
@@ -12,7 +12,7 @@ if (root == "P:/") {
                R_USER="C:/Users/aeschuma",
                R_LIBS_USER="C:/Users/aeschuma/R_libraries")
     .libPaths("C:/Users/aeschuma/R_libraries")
-} else if (root == "/home/students/aeschuma/") {
+} else if (root == "/home/users/aeschuma/") {
     Sys.setenv(HOME=root,
                R_USER=root,
                R_LIBS_USER=paste0(root,"R/x86_64-pc-linux-gnu-library/3.6"))
@@ -20,7 +20,7 @@ if (root == "P:/") {
 }
 
 ## load libraries
-if (root == "/home/students/aeschuma/") {
+if (root == "/home/users/aeschuma/") {
     library(Rcpp,lib.loc=paste0(root,"R/x86_64-pc-linux-gnu-library/3.6"));
     library(StanHeaders,lib.loc=paste0(root,"R/x86_64-pc-linux-gnu-library/3.6")); 
     library(BH,lib.loc = paste0(root,"R/x86_64-pc-linux-gnu-library/3.6"))
@@ -28,13 +28,13 @@ if (root == "/home/students/aeschuma/") {
 } else {
     library(Rcpp); library(StanHeaders); library(BH); library(rstan);library(bayesplot);
 }
-library(parallel);library(scales); library(RColorBrewer);library(data.table);library(ggplot2); 
+library(scales); library(RColorBrewer); library(ggplot2); 
 
 ########
 ## TESTING THE CODE?
 ########
 
-testing <- FALSE
+testing <- TRUE
 
 ## define directories
 
@@ -87,6 +87,15 @@ if (!testing) {
     setwd(paste0(savedir,"/../../out/stage-2-simulation"))
     sapply(list.files(), unlink)
     
-    setwd(root)
-    system("rm -f /home/users/aeschuma/qsub-compile-sims*")
+    if (root == "P:/") {
+        setwd("C:/Users/aeschuma/Dropbox/dissertation_2/survey-csmf/results/stage-2-simulation")
+        save(results_comp, diags_comp, file = paste0("results-diags_run-", run_number,".Rdata"))
+        
+        setwd(root)
+        pe_o_files <- grep("s2sim_", list.files(), value = TRUE)
+        sapply(v, unlink)
+    } else if (root == "/home/users/aeschuma/") {
+        setwd(root)
+        system("rm -f /home/users/aeschuma/s2sim_*")
+    }
 }
