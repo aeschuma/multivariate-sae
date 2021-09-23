@@ -114,7 +114,7 @@ simulateData <- function(dgm, Amat, scaling_factor, seed, testing = FALSE) {
     y <- matrix(NA, nrow = n_regions, ncol = 2)
     for (i in 1:n_regions) {
         mu <- c(mean_pars["beta[1]"] + (convolved_re_1[i] * mean_pars["sigma[1]"]) + (mean_pars["lambda"] * u_2[i]), 
-                mean_pars["beta[2]"] + (convolved_re_2[i] * mean_pars["sigma[1]"]))
+                mean_pars["beta[2]"] + (convolved_re_2[i] * mean_pars["sigma[2]"]))
         y[i, ] <- rmvnorm(1, mu, V.array[i,,])
     }
         

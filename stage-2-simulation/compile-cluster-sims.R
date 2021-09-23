@@ -93,7 +93,7 @@ if (!testing) {
         
         setwd(root)
         pe_o_files <- grep("s2sim_", list.files(), value = TRUE)
-        sapply(v, unlink)
+        sapply(pe_o_files, unlink)
     } else if (root == "/home/users/aeschuma/") {
         setwd(root)
         system("rm -f /home/users/aeschuma/s2sim_*")
