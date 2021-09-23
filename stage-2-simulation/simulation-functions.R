@@ -48,7 +48,7 @@ simulateData <- function(dgm, Amat, scaling_factor, seed, testing = FALSE) {
     par_mod <- NA
     if (data_based == 1) {
         par_mod <- unique(my_dgm)
-        mod_list <- read_rds(paste0("/Users/austin/Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/", par_mod, ".rds"))
+        mod_list <- read_rds(paste0("~/Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/", par_mod, ".rds"))
         
     } else {
         mod_list <- NA
