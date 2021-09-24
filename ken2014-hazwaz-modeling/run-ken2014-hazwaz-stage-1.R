@@ -20,24 +20,6 @@ library(gridExtra)
 library(ggpubr)
 library(loo)
 
-
-## ----functions, cache = FALSE----------------------------------------------------------------
-# plotting maps function
-plot_maps <- function(poly, outcome.df, 
-                      names.reg.poly, names.reg.outcomes, 
-                      outcomes, outcomes.names, 
-                      plot.palette) {
-  tmp <- merge(poly, outcome.df[, c(names.reg.outcomes, outcomes)], 
-               by.x = names.reg.poly, by.y = names.reg.outcomes)
-  plot.grid <- vector(mode = "list", length = length(outcomes))
-  for(i in 1:length(outcomes.names)) {
-    plot.grid[[i]] <- spplot(tmp, outcomes[i], 
-                             col.regions = plot.palette, cuts = length(plot.palette) - 1,
-                             main = outcomes.names[i])
-  }
-  do.call(grid.arrange, plot.grid)
-}
-
 ## ----read-data-----------------------------------------------------------------------
 load("/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/haz-waz-kenDHS2014.rda")
 
@@ -104,15 +86,3 @@ stage_1_list <- list(results = results,
 
 # save stage 1 results
 write_rds(stage_1_list, file = "../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-hazwaz-stage-1.rds")
-
-## ----fs-plots, fig.width = 7, fig.height = 10------------------------------------------------
-# polygon plots
-n_cats <- 15
-plot.palette <- viridis(n_cats)
-outcomes.names <- c("Mean HAZ", "Mean WAZ", "SE HAZ", "SE WAZ", "Corr")
-outcomes <- c("meanHAZ.bi", "meanWAZ.bi", "seHAZ.bi", "seWAZ.bi", "corr.bi")
-
-plot_maps(poly = poly.adm1, outcome.df = results, 
-          names.reg.poly = "NAME_1", names.reg.outcomes = "admin1.name",
-          outcomes = outcomes, outcomes.names = outcomes.names, 
-          plot.palette = plot.palette)

@@ -24,7 +24,7 @@ library(loo)
 load("/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/haz-waz-kenDHS2014.rda")
 stage_1_list <- read_rds("/Users/austin/Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-hazwaz-stage-1.rds")
 results <- stage_1_list[["results"]]
-V.array <- stage_1_list[["V.array"]]
+V.array <- stage_1_list[["V.array.flip"]]
 n_regions <- nrow(poly.adm1)
 
 ## ----bi-shared-mod-b11---------------------------------------------------------------------------
@@ -37,7 +37,7 @@ sigma_normal_sd <- 1
 datlist <- list(R = n_regions,
                 regions = results$admin1,
                 Sigma = V.array,
-                y = results[, c("meanHAZ.bi", "meanWAZ.bi")],
+                y = results[, c("meanWAZ.bi", "meanHAZ.bi")],
                 N_edges = node.info$n_edges,
                 node1 = node.info$node1,
                 node2 = node.info$node2,
@@ -88,7 +88,7 @@ res_list <- list(data = datlist,
                  mod = list(mod.stan.bi.shared))
 
 write_rds(res_list, 
-          file = "../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-hazwaz-stage-2-bivariate-shared-coreg-b11.rds")
+          file = "../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-hazwaz-stage-2-bivariate-shared-coreg-flip-b11.rds")
 
 # sample_pars <- c("beta", "sigma", "rho", "lambda)
 # stan_trace(mod.stan.bi.shared, pars = sample_pars)
@@ -108,7 +108,7 @@ sigma_normal_sd <- 1
 datlist <- list(R = n_regions,
                 regions = results$admin1,
                 Sigma = V.array,
-                y = results[, c("meanHAZ.bi", "meanWAZ.bi")],
+                y = results[, c("meanWAZ.bi", "meanHAZ.bi")],
                 N_edges = node.info$n_edges,
                 node1 = node.info$node1,
                 node2 = node.info$node2,
@@ -159,7 +159,7 @@ res_list <- list(data = datlist,
                  mod = list(mod.stan.bi.shared))
 
 write_rds(res_list, 
-          file = "../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-hazwaz-stage-2-bivariate-shared-coreg-b33.rds")
+          file = "../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-hazwaz-stage-2-bivariate-shared-coreg-flip-b33.rds")
 
 # sample_pars <- c("beta", "sigma", "rho", "lambda)
 # stan_trace(mod.stan.bi.shared, pars = sample_pars)
