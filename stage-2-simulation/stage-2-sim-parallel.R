@@ -71,7 +71,7 @@ if (testing) {
     m_number <- 2
     
     ## data generation options
-    dgm <- 2
+    dgm <- 1
     
     ## stan options
     niter <- 10000
@@ -81,7 +81,7 @@ if (testing) {
     adapt_delta <- 0.95
     
     ## which run
-    run_number <- 1
+    run_number <- 9999
     
     ## which simulation
     sim <- 2
@@ -111,11 +111,12 @@ my_model <- models_dat %>% dplyr::filter(model_number == m_number) %>% dplyr::se
 
 # load data
 dgm_file <- read_csv("dgm-info.csv")
-my_dgm <- dgm_file %>% dplyr::filter(dgm_number == dgm) %>% dplyr::select(-1) %>% dplyr::slice(1) %>% unlist()
-load(my_dgm["geo_data"])
+my_dgm <- dgm_file %>% dplyr::filter(dgm_number == dgm) %>% dplyr::select(-dgm_number) %>% dplyr::slice(1)
+load(my_dgm %>% pull(geo_data))
+my_dgm <- my_dgm %>% select(-geo_data)
 
 # Simulate data ####
-simulated_data <- simulateData(dgm = dgm, 
+simulated_data <- simulateData(dgm_specs = my_dgm, 
                                Amat = admin1.mat, 
                                scaling_factor = scaling_factor, 
                                seed = 80085, 

@@ -25,39 +25,39 @@ sim.Q <- function(Q){
 # output:
 #   datlist: list of data to be used as input to various STAN models
 #   params: values of parameters used in the simulation
-simulateData <- function(dgm, Amat, scaling_factor, seed, testing = FALSE) {
+simulateData <- function(dgm_specs, Amat, scaling_factor, seed, testing = FALSE) {
     
     # testing
     if (testing == TRUE) {
+        dgm_specs <- my_dgm
         Amat <- admin1.mat
         scaling_factor <- scaling_factor
-        dgm <- 1
         seed <- 80085
     }
     
     n_regions <- nrow(Amat)
     
     # load dgm data
-    dgm_file <- read_csv("dgm-info.csv")
-    my_dgm <- dgm_file %>% filter(dgm_number == dgm) %>% select(-1) %>% slice(1) %>% unlist()
-    data_based <- as.numeric(my_dgm["data_based"])
-    my_dgm <- my_dgm[-1:-2]
+    my_dgm <- dgm_specs %>% unlist()
     
-    # check parameter model and set
-    if (data_based == 1 & length(unique(my_dgm)) != 1) stop("Not all parameters are from the same data-based model")
-    par_mod <- NA
-    if (data_based == 1) {
-        par_mod <- unique(my_dgm)
-        mod_list <- read_rds(paste0("~/Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/", par_mod, ".rds"))
-        
-    } else {
-        mod_list <- NA
-    }
-    
-    # check par model is legit
-    if (data_based == 1 & !(par_mod %in% c("ken2014-hazwaz-stage-2-bivariate-shared-coreg",
-                                           "ken2014-hazwaz-stage-2-bivariate-nonshared"))) {
-        stop("Model for parameter values not yet supported")
+    # load models to pull from 
+    numeric_pars <- suppressWarnings(as.numeric(my_dgm))
+    if (any(is.na(numeric_pars))) {
+        models_to_load <- unique(my_dgm[is.na(numeric_pars)])
+        mod_lists <- vector(mode = "list", length = length(models_to_load))
+        names(mod_lists) <- models_to_load
+        for (i in 1:length(mod_lists)) {
+            # check par model is legit
+            if (!(models_to_load[i] %in% c("ken2014-hazwaz-stage-2-bivariate-shared-coreg-b11",
+                                           "ken2014-hazwaz-stage-2-bivariate-nonshared-b11",
+                                           "ken2014-hazwaz-stage-2-bivariate-shared-coreg-b33",
+                                           "ken2014-hazwaz-stage-2-bivariate-nonshared-b33"))) {
+                stop(paste0("Model ",models_to_load[i] ," not yet supported"))
+            }
+            
+            # load model
+            mod_lists[[i]] <- read_rds(paste0("~/Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/", models_to_load[i], ".rds"))
+        }
     }
     
     # set seed
@@ -67,20 +67,114 @@ simulateData <- function(dgm, Amat, scaling_factor, seed, testing = FALSE) {
     all_par_names <- names(my_dgm)
     
     V_pars <- my_dgm[grep("V_", all_par_names, value = TRUE)]
-    if (data_based == 1) {
-        V.array <- mod_list$data$Sigma
-    } else (
-        stop("Creating fixed covariance matrix for non-data-based parameters not yet implemented")
-    )
+    if (length(unique(V_pars)) == 1) { # if all parameters are from the same model
+        this.V.mod <- unique(V_pars)
+        V.array <- mod_lists[[this.V.mod]]$data$Sigma
+    } else {
+        # V correlation
+        corr_pars <- V_pars[grepl("V_corr", names(V_pars))]
+        corr_pars_num <- suppressWarnings(as.numeric(corr_pars))
+        names(corr_pars_num) <- names(corr_pars)
+
+        if (sum(is.na(corr_pars_num)) == 0) { # if correlation parameters are numeric
+            
+            if (corr_pars_num["V_corr_lower"] > corr_pars_num["V_corr_upper"]) {
+                stop("Correlation lower bound is larger than upper bound!")
+            }
+            
+            # correlation parameters are random uniform between bounds
+            V.array.tmp <- mod_lists[[corr_par]]$data$Sigma
+            num_corrs <- dim(V.array.tmp)[1]
+            
+            my.corrs <- runif(num_corrs, corr_pars_num["V_corr_lower"], corr_pars_num["V_corr_upper"])
+            
+        } else if (sum(is.na(corr_pars_num)) == length(corr_pars_num)) { # if correlation parameters are from a model
+            
+            if (length(unique(corr_pars)) != 1) {
+                stop("If based on a model, correlation parameters must be from the SAME model")
+            }
+            corr_par <- unique(corr_pars)
+            V.array.tmp <- mod_lists[[corr_par]]$data$Sigma
+            num_corrs <- dim(V.array.tmp)[1]
+            my.corrs <- rep(NA, num_corrs)
+            for (j in 1:num_corrs) {
+                Vtmp <- V.array.tmp[j,,]
+                D <- diag(sqrt(diag(Vtmp)))
+                DInv <- solve(D)
+                corr.tmp <- DInv %*% Vtmp %*% DInv
+                my.corrs[j] <- corr.tmp[1,2]
+            }
+        } else {
+            stop("Need to either have correlation lower and upper bounds both from a model, or both numeric")
+        }
+        
+        # V diags
+        vdiag_pars <- V_pars[grepl("V_diag", names(V_pars))]
+        vdiag_pars_num <- suppressWarnings(as.numeric(vdiag_pars))
+        names(vdiag_pars_num) <- names(vdiag_pars)
+        
+        if (sum(is.na(vdiag_pars_num)) == 0) { # if V diagonal parameters are numeric
+            
+            if (vdiag_pars_num["V_diag_lower"] > vdiag_pars_num["V_diag_upper"]) {
+                stop("V diagonal lower bound is larger than upper bound!")
+            }
+            
+            # V diagonal parameters are random uniform between bounds
+            V.array.tmp <- mod_lists[[corr_par]]$data$Sigma
+            
+            my.diag.mat <- array(NA, dim = dim(V.array.tmp))
+            for (jj in 1:dim(my.diag.mat)[1]) {
+                my.diag.mat[jj,,] <- diag(runif(2, vdiag_pars_num["V_diag_lower"], vdiag_pars_num["V_diag_upper"]), 
+                                          nrow = 2, ncol = 2)
+            }
+        } else if (sum(is.na(vdiag_pars_num)) == length(vdiag_pars_num)) { # if V diagonal parameters are from a model
+            
+            if (length(unique(vdiag_pars)) != 1) {
+                stop("If based on a model, V diagonal parameters must be from the SAME model")
+            }
+            vdiag_par <- unique(vdiag_pars)
+            V.array.tmp <- mod_lists[[vdiag_par]]$data$Sigma
+            num_vdiags <- dim(V.array.tmp)[1]
+            my.diag.mat <- V.array.tmp
+            for (jj in 1:num_vdiags) {
+                my.diag.mat[jj,1,2] <- 0
+                my.diag.mat[jj,2,1] <- 0
+            }
+        } else {
+            stop("Need to either have V diagonal lower and upper bounds both from a model, or both numeric")
+        }
+        
+        if (length(my.corrs) != dim(my.diag.mat)[1]) {
+            stop("Number of correlations is not equal to the number of V diagonals")
+        }
+        
+        # combine corr and V diagonal
+        V.array <- array(NA, dim = dim(my.diag.mat))
+        for (jj in 1:dim(my.diag.mat)[1]) {
+            Omega <- matrix(c(1, my.corrs[jj], my.corrs[jj], 1), ncol = 2, nrow = 2)
+            tmp.mat <- sqrt(my.diag.mat[jj,,]) %*% Omega %*% sqrt(my.diag.mat[jj,,])
+            V.array[jj,,] <- tmp.mat
+        }
+    }
     
     mean_pars_names <- all_par_names[!(all_par_names %in% names(V_pars))]
-    mean_pars <- suppressWarnings(as.numeric(my_dgm[mean_pars_names]))
-    if (data_based == 1) {
-        for (i in 1:length(mean_pars)) {
-            if (mean_pars_names[i] == "lambda" & par_mod == "ken2014-hazwaz-stage-2-bivariate-nonshared") {
+    
+    mean_pars.tmp <- my_dgm[mean_pars_names]
+    mean_pars_num.tmp <- suppressWarnings(as.numeric(mean_pars.tmp))
+    
+    mean_pars <- rep(NA, length(mean_pars.tmp))
+    
+    # mean_pars_from_model <- mean_pars[which(is.na(mean_pars_num))]
+    
+    for (i in 1:length(mean_pars)) {
+        if (!is.na(mean_pars_num.tmp[i])) {
+            mean_pars[i] <- as.numeric(mean_pars.tmp[i])
+        } else {
+            par_mod.tmp <- mean_pars.tmp[i]
+            if (mean_pars_names[i] == "lambda" & grepl("nonshared", par_mod.tmp)) {
                 mean_pars[i] <- 0
             } else {
-                mean_pars[i] <- summary(mod_list[["mod"]][[1]], par = mean_pars_names[i])$summary[,"50%"]
+                mean_pars[i] <- summary(mod_lists[[par_mod.tmp]][["mod"]][[1]], par = mean_pars_names[i])$summary[,"50%"]
             }
         }
     }
