@@ -37,7 +37,7 @@ library(haven); library(knitr); library(INLA); library(readr);
 if (root == "~/") library(cmdstanr);
 
 ## TESTING THE CODE?
-testing <- FALSE
+testing <- TRUE
 
 ## define directories
 
@@ -81,7 +81,7 @@ if (testing) {
     adapt_delta <- 0.9
     
     ## which run
-    run_number <- 9999
+    run_number <- 999
     
     ## which simulation
     sim <- 2
@@ -120,8 +120,8 @@ my_dgm <- my_dgm %>% dplyr::select(-geo_data, -random_re)
 simulated_data <- simulateData(dgm_specs = my_dgm, 
                                Amat = admin1.mat, 
                                scaling_factor = scaling_factor, 
-                               seed_re = ifelse(random_re, (run_number + 10) * 3, 80085), 
-                               seed_lik = run_number * 2,
+                               seed_re = ifelse(random_re, sim + 500, 80085), 
+                               seed_lik = sim,
                                testing = FALSE)
 
 # update with priors
@@ -227,14 +227,14 @@ if (!testing) {
 if (testing) {
     
     # make diagnostic plots
-    stan_trace(stan_list$mod_stan, pars = params_to_extract)
-    pairs(stan_list$mod_stan, pars = params_to_extract)
+    # stan_trace(stan_list$mod_stan, pars = params_to_extract)
+    # pairs(stan_list$mod_stan, pars = params_to_extract)
     # mcmc_areas(as.matrix(stan_list$mod_stan),
     #            pars = c("beta[1]", "beta[2]", 
     #                     "sigma_gamma[1]", "sigma_gamma[2]",
     #                     "lambda", "sigma_delta"),
     #            prob = 0.8)
-    mcmc_nuts_energy(nuts_params(stan_list$mod_stan))
+    # mcmc_nuts_energy(nuts_params(stan_list$mod_stan))
     
     # plot REs (estimated vs. truth)
     

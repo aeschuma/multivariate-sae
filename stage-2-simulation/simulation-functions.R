@@ -293,7 +293,7 @@ fitSTAN <- function(stan_file, data,
                              warmup = niter*prop_warmup,
                              control = list(max_treedepth = max_treedepth,
                                             adapt_delta = adapt_delta),
-                             seed = 530)
+                             seed = 5)
         } else {
             mod_stan <- stan(file = stan_file,
                              data = data,
@@ -302,7 +302,7 @@ fitSTAN <- function(stan_file, data,
                              init = inits,
                              control = list(max_treedepth = max_treedepth,
                                             adapt_delta = adapt_delta),
-                             seed = 530)
+                             seed = 5)
         }
     } else {
         if (is.null(inits)) {
@@ -312,7 +312,7 @@ fitSTAN <- function(stan_file, data,
                                   chains = nchains, thin = nthin,
                                   adapt_delta = adapt_delta, max_treedepth = max_treedepth,
                                   refresh = 0,
-                                  seed = 530)
+                                  seed = 5)
             mod_stan <- rstan::read_stan_csv(fit$output_files())
         } else {
             cmd_mod <- cmdstan_model(stan_file = stan_file)
@@ -322,7 +322,7 @@ fitSTAN <- function(stan_file, data,
                                   adapt_delta = adapt_delta, max_treedepth = max_treedepth,
                                   init = inits,
                                   refresh = 0,
-                                  seed = 530)
+                                  seed = 5)
             mod_stan <- rstan::read_stan_csv(fit$output_files())
         }
     }
