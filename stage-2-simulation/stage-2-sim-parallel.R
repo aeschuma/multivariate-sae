@@ -37,7 +37,7 @@ library(haven); library(knitr); library(INLA); library(readr);
 if (root == "~/") library(cmdstanr);
 
 ## TESTING THE CODE?
-testing <- FALSE
+testing <- TRUE
 
 ## define directories
 
@@ -73,20 +73,20 @@ if (testing) {
     m_number <- 2
     
     ## data generation options
-    dgm <- 1
+    dgm <- 10
     
     ## stan options
-    niter <- 8000
+    niter <- 5000
     nchains <- 2
     prop_warmup <- 0.5
     max_treedepth <- 25
-    adapt_delta <- 0.9
+    adapt_delta <- 0.8
     
     ## which run
     run_number <- 999
     
     ## which simulation
-    sim <- 2
+    sim <- 499
 } else {
     ## which model to run
     m_number <- as.numeric(commandArgs(trailingOnly=TRUE)[1])
@@ -124,7 +124,7 @@ cat(paste("Simulate data \n"))
 simulated_data <- simulateData(dgm_specs = my_dgm, 
                                Amat = admin1.mat, 
                                scaling_factor = scaling_factor, 
-                               seed_re = ifelse(random_re, sim + 500, 80085), 
+                               seed_re = ifelse(random_re, sim + 500, 98125), 
                                seed_lik = sim,
                                testing = FALSE)
 

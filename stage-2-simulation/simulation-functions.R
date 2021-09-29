@@ -292,7 +292,8 @@ fitSTAN <- function(stan_file, data,
                              iter = niter, chains = nchains, thin = nthin, 
                              warmup = niter*prop_warmup,
                              control = list(max_treedepth = max_treedepth,
-                                            adapt_delta = adapt_delta))
+                                            adapt_delta = adapt_delta),
+                             seed = 530)
         } else {
             mod_stan <- stan(file = stan_file,
                              data = data,
@@ -300,7 +301,8 @@ fitSTAN <- function(stan_file, data,
                              warmup = niter*prop_warmup,
                              init = inits,
                              control = list(max_treedepth = max_treedepth,
-                                            adapt_delta = adapt_delta))
+                                            adapt_delta = adapt_delta),
+                             seed = 530)
         }
     } else {
         if (is.null(inits)) {
@@ -309,7 +311,8 @@ fitSTAN <- function(stan_file, data,
                                   iter_warmup = niter*prop_warmup, iter_sampling = niter*(1-prop_warmup),
                                   chains = nchains, thin = nthin,
                                   adapt_delta = adapt_delta, max_treedepth = max_treedepth,
-                                  refresh = 0)
+                                  refresh = 0,
+                                  seed = 530)
             mod_stan <- rstan::read_stan_csv(fit$output_files())
         } else {
             cmd_mod <- cmdstan_model(stan_file = stan_file)
@@ -318,7 +321,8 @@ fitSTAN <- function(stan_file, data,
                                   chains = nchains, thin = nthin,
                                   adapt_delta = adapt_delta, max_treedepth = max_treedepth,
                                   init = inits,
-                                  refresh = 0)
+                                  refresh = 0,
+                                  seed = 530)
             mod_stan <- rstan::read_stan_csv(fit$output_files())
         }
     }

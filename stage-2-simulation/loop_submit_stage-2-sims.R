@@ -46,8 +46,8 @@ setwd(wd)
 
 ## which model and dgm to run?
 # see model-info.csv
-# model_to_run <- c(1, 2)
-model_to_run <- 1:2
+model_to_run <- c(1, 2)
+# model_to_run <- 3:4
 # dgm_to_run <- c(1, 2)
 dgm_to_run <- 1:12
 
