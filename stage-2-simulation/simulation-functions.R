@@ -292,8 +292,7 @@ fitSTAN <- function(stan_file, data,
                              iter = niter, chains = nchains, thin = nthin, 
                              warmup = niter*prop_warmup,
                              control = list(max_treedepth = max_treedepth,
-                                            adapt_delta = adapt_delta),
-                             seed = 5)
+                                            adapt_delta = adapt_delta))
         } else {
             mod_stan <- stan(file = stan_file,
                              data = data,
@@ -301,8 +300,7 @@ fitSTAN <- function(stan_file, data,
                              warmup = niter*prop_warmup,
                              init = inits,
                              control = list(max_treedepth = max_treedepth,
-                                            adapt_delta = adapt_delta),
-                             seed = 5)
+                                            adapt_delta = adapt_delta))
         }
     } else {
         if (is.null(inits)) {
