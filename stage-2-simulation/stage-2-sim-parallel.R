@@ -37,7 +37,7 @@ library(haven); library(knitr); library(INLA); library(readr);
 if (root == "~/") library(cmdstanr);
 
 ## TESTING THE CODE?
-testing <- TRUE
+testing <- FALSE
 
 ## define directories
 
