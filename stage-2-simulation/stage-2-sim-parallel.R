@@ -58,13 +58,15 @@ options(mc.cores = detectCores())
 # load simulation functions:
 #   simulateData()
 #   fitSTAN()
+cat(paste("load sim functions \n"))
 source("simulation-functions.R")
 
 # load model csv to load which model we're running
+cat(paste("load model info \n"))
 models_dat <- read_csv("model-info.csv")
 # only if need to rewrite csv to get rid of warning message for incomplete final line
 # write.csv(models_dat, file = "model-info.csv", row.names = FALSE)
-
+cat(paste("set parameters from command args \n"))
 # Set parameters! ####
 if (testing) {
     ## which model to run
@@ -106,6 +108,7 @@ if (testing) {
     sim <- as.numeric(commandArgs(trailingOnly=TRUE)[9])
 }
 
+cat(paste("Set modeling info \n"))
 # set the model to run
 my_model <- models_dat %>% dplyr::filter(model_number == m_number) %>% dplyr::select(-1) %>% dplyr::slice(1) %>% unlist()
 
@@ -116,6 +119,7 @@ load(my_dgm %>% pull(geo_data))
 random_re <- my_dgm %>% pull(random_re)
 my_dgm <- my_dgm %>% dplyr::select(-geo_data, -random_re)
 
+cat(paste("Simulate data \n"))
 # Simulate data ####
 simulated_data <- simulateData(dgm_specs = my_dgm, 
                                Amat = admin1.mat, 
@@ -130,6 +134,7 @@ simulated_data$datlist$rho_beta_2 <- as.numeric(my_model["rho_beta_2"])
 simulated_data$datlist$sigma_normal_sd <- as.numeric(my_model["sigma_normal_sd"])
 
 # Fit STAN model ####
+cat(paste("Fit stan model \n"))
 if (root == "~/") {
     stan_list <- fitSTAN(stan_file = my_model["stan_model_file"], 
                          data = simulated_data$datlist,
@@ -145,7 +150,7 @@ if (root == "~/") {
 }
 
 # Calculate summary measures ####
-
+cat(paste("Calculate summary measures \n"))
 # save parameter names in order to extract and save results
 params_to_extract <- names(simulated_data$params[["mean_pars"]])
 if (!(my_model["stan_model_file"] %in% c("stan-models/shared-bym2-coregionalization.stan"))) {
@@ -216,6 +221,7 @@ stan_diags <- data.frame(pct_divergent = get_num_divergent(stan_list$mod_stan)/(
                          pct_bmfi_low_chains = sum(is.finite(get_low_bfmi_chains(stan_list$mod_stan)))/nchains)
 
 # Save results ####
+cat(paste("Save results \n"))
 if (!testing) {
     # save results
     setwd(savedir)

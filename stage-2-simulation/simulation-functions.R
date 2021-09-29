@@ -284,7 +284,7 @@ fitSTAN <- function(stan_file, data,
     }
     
     start.time <- proc.time() 
-    
+    cat(paste("Starting stan modeling! \n"))
     if (cmd == FALSE) {
         if (is.null(inits)) {
             mod_stan <- stan(file = stan_file,
@@ -309,8 +309,7 @@ fitSTAN <- function(stan_file, data,
                                   iter_warmup = niter*prop_warmup, iter_sampling = niter*(1-prop_warmup),
                                   chains = nchains, thin = nthin,
                                   adapt_delta = adapt_delta, max_treedepth = max_treedepth,
-                                  refresh = 0,
-                                  seed = 5)
+                                  refresh = 0)
             mod_stan <- rstan::read_stan_csv(fit$output_files())
         } else {
             cmd_mod <- cmdstan_model(stan_file = stan_file)
@@ -319,14 +318,16 @@ fitSTAN <- function(stan_file, data,
                                   chains = nchains, thin = nthin,
                                   adapt_delta = adapt_delta, max_treedepth = max_treedepth,
                                   init = inits,
-                                  refresh = 0,
-                                  seed = 5)
+                                  refresh = 0)
             mod_stan <- rstan::read_stan_csv(fit$output_files())
         }
     }
     stop.time <- proc.time()
+    
+    cat(paste("Creating output! \n"))
     output <- list(stan_file = stan_file,
                    mod_stan = mod_stan,
                    elapsed_time = stop.time[3] - start.time[3])
+    cat(paste("Done! \n"))
     return(output)
 }

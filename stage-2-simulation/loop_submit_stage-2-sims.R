@@ -51,14 +51,14 @@ dgm_to_run <- c(1, 2)
 # dgm_to_run <- 1:12
 
 ## STAN options
-niter <- 8000
+niter <- 10000
 nchains <- 2
 prop_warmup <- 0.5
-max_treedepth <- 50
-adapt_delta <- 0.85
+max_treedepth <- 100
+adapt_delta <- 0.9
 
 ## Simulation number
-number_of_sims <- 2
+number_of_sims <- 3
 
 ## loop and submit jobs
 running_total <- 0
