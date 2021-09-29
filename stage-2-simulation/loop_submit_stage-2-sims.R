@@ -46,7 +46,8 @@ setwd(wd)
 
 ## which model and dgm to run?
 # see model-info.csv
-model_to_run <- c(1, 2)
+# model_to_run <- c(1, 2)
+model_to_run <- 1:2
 # dgm_to_run <- c(1, 2)
 dgm_to_run <- 1:12
 
@@ -58,7 +59,7 @@ max_treedepth <- 25
 adapt_delta <- 0.8
 
 ## Simulation number
-number_of_sims <- 3
+number_of_sims <- 500
 
 ## loop and submit jobs
 running_total <- 0
