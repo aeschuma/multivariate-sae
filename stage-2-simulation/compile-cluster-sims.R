@@ -48,13 +48,13 @@ for (i in 1:length(resfiles)) {
                      as.numeric(regmatches(resfiles[i], regexec("results_run-\\s*(.*?)\\s*_", resfiles[i]))[[1]][2]))
 }
 
-run_numbers <- unique(run_numbers)
+run_numbers <- sort(unique(run_numbers))
 for (rn in 1:length(run_numbers)) {
     setwd(paste0(savedir,"/tmp"))
     
     run_number <- run_numbers[rn]
     
-    tmp.resfiles <- grep(paste0("results_run-", run_number), resfiles, value = TRUE)
+    tmp.resfiles <- grep(paste0("results_run-", run_number, "_sim-"), resfiles, value = TRUE)
     tmp.diagfiles <- grep(paste0("standiags_run-", run_number), diagfiles, value = TRUE)
     
     # compile results
