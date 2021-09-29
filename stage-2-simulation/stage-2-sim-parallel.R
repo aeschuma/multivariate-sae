@@ -222,7 +222,7 @@ mean_pred_res <- data.frame(param = "mean_preds",
 cat(paste("Create results output \n"))
 
 # add onto results
-sim_res <- bind_rows(sim_res, mean_pred_res)
+sim_res <- rbind(sim_res, mean_pred_res)
 
 cat(paste("Calculate stan diagnostics \n"))
 
