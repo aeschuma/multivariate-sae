@@ -46,18 +46,19 @@ setwd(wd)
 
 ## which model and dgm to run?
 # see model-info.csv
-model_to_run <- c(1, 2, 3, 4)
-dgm_to_run <- c(1, 2)
+model_to_run <- c(1, 2)
+# dgm_to_run <- c(1, 2)
+dgm_to_run <- 1:12
 
 ## STAN options
-niter <- 10000
+niter <- 8000
 nchains <- 2
 prop_warmup <- 0.5
-max_treedepth <- 100
-adapt_delta <- 0.9
+max_treedepth <- 25
+adapt_delta <- 0.8
 
 ## Simulation number
-number_of_sims <- 500
+number_of_sims <- 3
 
 ## loop and submit jobs
 running_total <- 0

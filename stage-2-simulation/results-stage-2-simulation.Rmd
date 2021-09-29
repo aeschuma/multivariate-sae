@@ -1,0 +1,179 @@
+---
+title: "Stage 2 simulation results"
+author: "Austin Schumacher"
+date: "`r Sys.Date()`"
+output: 
+    pdf_document:
+        extra_dependencies: ["bm", "bbm", "tensor", "pdfpages"]
+        includes:
+            in_header: "~/Desktop/work/presentation_publication_resources/mycommands.tex"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(SUMMER)
+library(tidyverse)
+library(spdep)
+library(geosphere)
+library(haven)
+library(knitr)
+library(kableExtra)
+library(magrittr)
+library(rstan)
+library(cmdstanr)
+library(svyVGAM)
+library(mvtnorm)
+library(rgdal)
+library(bayesplot)
+library(INLA)
+library(viridis)
+library(classInt)
+library(gridExtra)
+library(ggpubr)
+library(loo)
+
+# load results run info
+res_run <- read_csv("results-run-info.csv")
+model_info <- read_csv("model-info.csv")
+dgm_info <- read_csv("dgm-info.csv")
+```
+
+# Overview
+
+We will perform a simulation study to explore the recovery of parameters
+
+# Data generating mechanism
+
+The likelihood for the DGM will be
+
+\eq{
+    (\hat{\bar{y}}^{HAZ}_r, \hat{\bar{y}}^{WAZ}_r) | (\mu^{HAZ}_r, \mu^{WAZ}_r),  \hat{\bm{V}}^{DES}_{r} &\sim N_2((\mu^{HAZ}_r, \mu^{WAZ}_r),  \hat{V}^{DES}_{r})
+}
+
+with $(\hat{Y}^{HAZ}_r, \hat{Y}^{WAZ}_r)$ playing the role of "observed" data, $\hat{V}^{DES}_{r}$ assumed fixed and known.
+
+For WAZ, we will specify the mean as the sum of an intercept, a spatial ICAR random effect, and a nonspatial IID random effect. For HAZ, we will specify the mean as the sum of an intercept, a spatial ICAR random effect, a nonspatial IID random effect, and a coefficient times the spatial ICAR random effect for WAZ. So we have 
+
+\eq{
+    \mu^{HAZ}_r &= \alpha_1 + v_{1r} + u_{1r} + \lambda u_{2r} \\
+    \mu^{WAZ}_r &= \alpha_2 + v_{2r} + u_{2r} \\
+    v_{1r} | \sigma^2_{v1} &\overset{iid}{\sim} N(0, \sigma^2_{1}) \\
+    v_{2r} | \sigma^2_{v2} &\overset{iid}{\sim} N(0, \sigma^2_{2}) \\
+    \bm{u}_1 &\sim ICAR(1) \\
+    \bm{u}_2 &\sim ICAR(1) 
+}
+
+We will use a BYM2 parameterization for the spatial and IID random effects in each model such that, for $c = 1, 2$, we let
+
+\eq{
+    v_{cr} + u_{cr} = \sigma_c(\sqrt{1 - \rho_c}v_{cr}^* + \sqrt{\rho_c}u_{cr}^*)
+}
+
+where $v_{cr}^* \overset{iid}{\sim} N(0,1)$ is the unstructured random effect with fixed standard deviation 1 and $\bm{u}_{r}^*$ is the ICAR model scaled so $\mbox{Var}(u_{cr}^*) \approx 1$, which is done by scaling the model so the geometric mean of these variances is 1, using the adjacency matrix to calculate the inverse precision of the ICAR model as in Riebler (2016).
+
+We will present simulation results for different scenarios. Each scenario will have one of 4 (soon to be 7) different sets of parameter values (which may or may not have a shared component), and a Bayesian model that may or may not be correctly specified for the DGM.
+
+\newpage
+
+## Scenario 1
+
+### Specification
+
+This scenario will generate data from a DGM without a shared component, using parameters from a model fit to the Kenya 2014 DHS without a shared component. We will fit a model without a shared component. Thus, it is a correctly specified model for the DGM.
+
+Here's a table with the parameter values for the DGM
+
+```{r}
+
+# load parameter values
+tmp <- read_rds(paste0("~/Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/",
+                       dgm_info$V_corr_lower[dgm_info$dgm_number == res_run$dgm_number[res_run$run_number == 1]],
+                       ".rds"))
+params_to_extract <- c("beta", "sigma", "rho")
+tmp_summary <- summary(tmp$mod[[1]], pars = params_to_extract, probs = c(0.5))$summary[, "50%"]
+tmp_summary <- c(tmp_summary, lambda = 0)
+kable(tmp_summary, format = "markdown", digits = 3)
+```
+
+We will fit this model to the data:
+
+\eq{
+    \mu^{HAZ}_r &= \alpha_1 + \sigma_1(\sqrt{1 - \rho_1}v_{1r}^* + \sqrt{\rho_1}u_{1r}^*) \\
+    \mu^{WAZ}_r &= \alpha_2 + \sigma_2(\sqrt{1 - \rho_2}v_{2r}^* + \sqrt{\rho_2}u_{2r}^*) \\
+    v_{1r} &\overset{iid}{\sim} N(0, 1) \\
+    v_{2r} &\overset{iid}{\sim} N(0, 1) \\
+    \bm{u}_1 &\sim ICAR(1) \\
+    \bm{u}_2 &\sim ICAR(1) 
+}
+
+We will put flat priors on the $\alpha_c$, $\mbox{Beta}(1, 1)$ priors on the $\rho_c$, and half-Normal(0, 1) priors on the $\sigma_c$.
+
+### Results
+
+```{r}
+# table of results
+load("~/Dropbox/dissertation_2/survey-csmf/results/stage-2-simulation/results-diags_run-1.Rdata")
+kable(results_comp, format = "markdown", digits = 3,
+      col.names = c("param", "mean abs bias", "mean rel bias", "mean cov 80%", "mean width 80%", "mean cov 95%", "mean width 95%"))
+```
+
+\newpage
+
+## Scenario 2
+
+### Specification
+
+This scenario will generate data from a DGM with a shared component, using parameters from a model fit to the Kenya 2014 DHS with a shared component. But we will fit a model without a shared component, thus it will be misspecified.
+
+Here's a table with the parameter values for the DGM
+
+```{r}
+
+# load parameter values
+tmp <- read_rds(paste0("~/Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/",
+                       dgm_info$V_corr_lower[dgm_info$dgm_number == res_run$dgm_number[res_run$run_number == 2]],
+                       ".rds"))
+params_to_extract <- c("beta", "sigma", "rho", "lambda")
+tmp_summary <- summary(tmp$mod[[1]], pars = params_to_extract, probs = c(0.5))$summary[, "50%"]
+kable(tmp_summary, format = "markdown", digits = 3)
+```
+
+We will fit this model to the data:
+
+\eq{
+    \mu^{HAZ}_r &= \alpha_1 + \sigma_1(\sqrt{1 - \rho_1}v_{1r}^* + \sqrt{\rho_1}u_{1r}^*) \\
+    \mu^{WAZ}_r &= \alpha_2 + \sigma_2(\sqrt{1 - \rho_2}v_{2r}^* + \sqrt{\rho_2}u_{2r}^*) \\
+    v_{1r} &\overset{iid}{\sim} N(0, 1) \\
+    v_{2r} &\overset{iid}{\sim} N(0, 1) \\
+    \bm{u}_1 &\sim ICAR(1) \\
+    \bm{u}_2 &\sim ICAR(1) 
+}
+
+We will put flat priors on the $\alpha_c$, $\mbox{Beta}(1, 1)$ priors on the $\rho_c$, and half-Normal(0, 1) priors on the $\sigma_c$.
+
+### Results
+
+```{r}
+rm(results_comp)
+rm(diags_comp)
+
+# table of results
+load("~/Dropbox/dissertation_2/survey-csmf/results/stage-2-simulation/results-diags_run-1.Rdata")
+kable(results_comp, format = "markdown", digits = 3,
+      col.names = c("param", "mean abs bias", "mean rel bias", "mean cov 80%", "mean width 80%", "mean cov 95%", "mean width 95%"))
+```
+
+\newpage
+
+## Scenario 3
+
+## Scenario 4
+
+## Scenario 5
+
+## Scenario 6
+
+## Scenario 7
+
+## Scenario 8
+

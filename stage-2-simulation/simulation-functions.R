@@ -25,14 +25,15 @@ sim.Q <- function(Q){
 # output:
 #   datlist: list of data to be used as input to various STAN models
 #   params: values of parameters used in the simulation
-simulateData <- function(dgm_specs, Amat, scaling_factor, seed, testing = FALSE) {
+simulateData <- function(dgm_specs, Amat, scaling_factor, seed_re, seed_lik, testing = FALSE) {
     
     # testing
     if (testing == TRUE) {
         dgm_specs <- my_dgm
         Amat <- admin1.mat
         scaling_factor <- scaling_factor
-        seed <- 80085
+        seed_re <- 80085
+        seed_lik <- 8008135
     }
     
     n_regions <- nrow(Amat)
@@ -60,9 +61,6 @@ simulateData <- function(dgm_specs, Amat, scaling_factor, seed, testing = FALSE)
         }
     }
     
-    # set seed
-    set.seed(seed)
-    
     # set parameters
     all_par_names <- names(my_dgm)
     
@@ -86,6 +84,8 @@ simulateData <- function(dgm_specs, Amat, scaling_factor, seed, testing = FALSE)
             V.array.tmp <- mod_lists[[corr_par]]$data$Sigma
             num_corrs <- dim(V.array.tmp)[1]
             
+            # set seed for these
+            set.seed(1)
             my.corrs <- runif(num_corrs, corr_pars_num["V_corr_lower"], corr_pars_num["V_corr_upper"])
             
         } else if (sum(is.na(corr_pars_num)) == length(corr_pars_num)) { # if correlation parameters are from a model
@@ -122,6 +122,8 @@ simulateData <- function(dgm_specs, Amat, scaling_factor, seed, testing = FALSE)
             # V diagonal parameters are random uniform between bounds
             V.array.tmp <- mod_lists[[corr_par]]$data$Sigma
             
+            # set seed for these
+            set.seed(2)
             my.diag.mat <- array(NA, dim = dim(V.array.tmp))
             for (jj in 1:dim(my.diag.mat)[1]) {
                 my.diag.mat[jj,,] <- diag(runif(2, vdiag_pars_num["V_diag_lower"], vdiag_pars_num["V_diag_upper"]), 
@@ -182,6 +184,9 @@ simulateData <- function(dgm_specs, Amat, scaling_factor, seed, testing = FALSE)
     
     # simulate data!
     
+    # set seed for random effects
+    set.seed(seed_re)
+    
     ## IID normal(0, 1)
     v_1 <- rnorm(n_regions, 0, 1)
     v_2 <- rnorm(n_regions, 0, 1)
@@ -204,12 +209,16 @@ simulateData <- function(dgm_specs, Amat, scaling_factor, seed, testing = FALSE)
     convolved_re_1 <- (sqrt(1 - mean_pars["rho[1]"]) * v_1) + (sqrt(mean_pars["rho[1]"] / scaling_factor) * u_1)
     convolved_re_2 <- (sqrt(1 - mean_pars["rho[2]"]) * v_2) + (sqrt(mean_pars["rho[2]"] / scaling_factor) * u_2)
     
+    # set seed for the likelihood
+    set.seed(seed_lik)
+    
     ## simulate from likelihood with fixed covariance
     y <- matrix(NA, nrow = n_regions, ncol = 2)
+    mu <- matrix(NA, nrow = n_regions, ncol = 2)
     for (i in 1:n_regions) {
-        mu <- c(mean_pars["beta[1]"] + (convolved_re_1[i] * mean_pars["sigma[1]"]) + (mean_pars["lambda"] * u_2[i]), 
-                mean_pars["beta[2]"] + (convolved_re_2[i] * mean_pars["sigma[2]"]))
-        y[i, ] <- rmvnorm(1, mu, V.array[i,,])
+        mu[i, ] <- c(mean_pars["beta[1]"] + (convolved_re_1[i] * mean_pars["sigma[1]"]) + (mean_pars["lambda"] * u_2[i]), 
+                     mean_pars["beta[2]"] + (convolved_re_2[i] * mean_pars["sigma[2]"]))
+        y[i, ] <- rmvnorm(1, mu[i, ], V.array[i,,])
     }
         
     datlist <- list(R = n_regions,
@@ -233,7 +242,8 @@ simulateData <- function(dgm_specs, Amat, scaling_factor, seed, testing = FALSE)
     
     params <- list(V_pars = V_pars,
                    mean_pars = mean_pars,
-                   REs = RE_list)
+                   REs = RE_list,
+                   bivariate_means = mu)
     # output
     output <- list(datlist = datlist,
                    params = params)
@@ -282,7 +292,8 @@ fitSTAN <- function(stan_file, data,
                              iter = niter, chains = nchains, thin = nthin, 
                              warmup = niter*prop_warmup,
                              control = list(max_treedepth = max_treedepth,
-                                            adapt_delta = adapt_delta))
+                                            adapt_delta = adapt_delta),
+                             seed = 530)
         } else {
             mod_stan <- stan(file = stan_file,
                              data = data,
@@ -290,7 +301,8 @@ fitSTAN <- function(stan_file, data,
                              warmup = niter*prop_warmup,
                              init = inits,
                              control = list(max_treedepth = max_treedepth,
-                                            adapt_delta = adapt_delta))
+                                            adapt_delta = adapt_delta),
+                             seed = 530)
         }
     } else {
         if (is.null(inits)) {
@@ -299,7 +311,8 @@ fitSTAN <- function(stan_file, data,
                                   iter_warmup = niter*prop_warmup, iter_sampling = niter*(1-prop_warmup),
                                   chains = nchains, thin = nthin,
                                   adapt_delta = adapt_delta, max_treedepth = max_treedepth,
-                                  refresh = 0)
+                                  refresh = 0,
+                                  seed = 530)
             mod_stan <- rstan::read_stan_csv(fit$output_files())
         } else {
             cmd_mod <- cmdstan_model(stan_file = stan_file)
@@ -308,7 +321,8 @@ fitSTAN <- function(stan_file, data,
                                   chains = nchains, thin = nthin,
                                   adapt_delta = adapt_delta, max_treedepth = max_treedepth,
                                   init = inits,
-                                  refresh = 0)
+                                  refresh = 0,
+                                  seed = 530)
             mod_stan <- rstan::read_stan_csv(fit$output_files())
         }
     }

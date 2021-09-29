@@ -74,11 +74,11 @@ if (testing) {
     dgm <- 1
     
     ## stan options
-    niter <- 10000
+    niter <- 8000
     nchains <- 2
     prop_warmup <- 0.5
     max_treedepth <- 25
-    adapt_delta <- 0.95
+    adapt_delta <- 0.9
     
     ## which run
     run_number <- 9999
@@ -113,13 +113,15 @@ my_model <- models_dat %>% dplyr::filter(model_number == m_number) %>% dplyr::se
 dgm_file <- read_csv("dgm-info.csv")
 my_dgm <- dgm_file %>% dplyr::filter(dgm_number == dgm) %>% dplyr::select(-dgm_number) %>% dplyr::slice(1)
 load(my_dgm %>% pull(geo_data))
-my_dgm <- my_dgm %>% select(-geo_data)
+random_re <- my_dgm %>% pull(random_re)
+my_dgm <- my_dgm %>% dplyr::select(-geo_data, -random_re)
 
 # Simulate data ####
 simulated_data <- simulateData(dgm_specs = my_dgm, 
                                Amat = admin1.mat, 
                                scaling_factor = scaling_factor, 
-                               seed = 80085, 
+                               seed_re = ifelse(random_re, (run_number + 10) * 3, 80085), 
+                               seed_lik = run_number * 2,
                                testing = FALSE)
 
 # update with priors
@@ -176,6 +178,39 @@ for (i in 1:nrow(sim_res)) {
     sim_res$width.95[i] <- posterior_qs[tmp_param_name, "97.5%"] - posterior_qs[tmp_param_name, "2.5%"]
 }
 
+# posterior observation means
+mod_pred_summary <- summary(stan_list$mod_stan,
+                            pars = "preds",
+                            probs = c(0.025, 0.1, 0.5, 0.9, 0.975))$summary[, c("2.5%", "10%", "50%", "90%", "97.5%")]
+mod_pred_50 <- matrix(mod_pred_summary[, "50%"], ncol = 2, byrow = TRUE)
+mod_pred_10 <- matrix(mod_pred_summary[, "10%"], ncol = 2, byrow = TRUE)
+mod_pred_90 <- matrix(mod_pred_summary[, "90%"], ncol = 2, byrow = TRUE)
+mod_pred_025 <- matrix(mod_pred_summary[, "2.5%"], ncol = 2, byrow = TRUE)
+mod_pred_975 <- matrix(mod_pred_summary[, "97.5%"], ncol = 2, byrow = TRUE)
+
+real_means <- simulated_data$params$bivariate_means
+
+absolute_bias_pred <- mean(mod_pred_50 - real_means)
+rel_bias_pred <- mean((mod_pred_50 - real_means) / real_means)
+
+cov80_pred <- mean( (real_means >= mod_pred_10) & (real_means <= mod_pred_90) )
+cov95_pred <- mean( (real_means >= mod_pred_025) & (real_means <= mod_pred_975) )
+
+width80_pred <- mean(mod_pred_90 - mod_pred_10)
+width95_pred <- mean(mod_pred_975 - mod_pred_025)
+
+mean_pred_res <- data.frame(param = "mean_preds",
+                            absolute_bias = absolute_bias_pred,
+                            relative_bias = rel_bias_pred,
+                            coverage.80 = cov80_pred,
+                            width.80 = width80_pred,
+                            coverage.95 = cov95_pred,
+                            width.95 = width95_pred)
+
+# add onto results
+sim_res <- bind_rows(sim_res, mean_pred_res)
+
+# stan diagnostics
 stan_diags <- data.frame(pct_divergent = get_num_divergent(stan_list$mod_stan)/(niter * nchains * prop_warmup),
                          pct_max_tree_exceeded = get_num_max_treedepth(stan_list$mod_stan)/(niter * nchains * prop_warmup),
                          pct_bmfi_low_chains = sum(is.finite(get_low_bfmi_chains(stan_list$mod_stan)))/nchains)
