@@ -150,12 +150,14 @@ if (root == "~/") {
 }
 
 # Calculate summary measures ####
-cat(paste("Calculate summary measures \n"))
+
 # save parameter names in order to extract and save results
 params_to_extract <- names(simulated_data$params[["mean_pars"]])
 if (!(my_model["stan_model_file"] %in% c("stan-models/shared-bym2-coregionalization.stan"))) {
     params_to_extract <- params_to_extract[which(params_to_extract != "lambda")]
 }
+
+cat(paste("Extract summaries for parameters \n"))
 
 # summaries
 mod_summary <- summary(stan_list$mod_stan,
@@ -163,6 +165,7 @@ mod_summary <- summary(stan_list$mod_stan,
                        probs = c(0.025, 0.1, 0.5, 0.9, 0.975))
 posterior_qs <- mod_summary$summary[, c("2.5%", "10%", "50%", "90%", "97.5%")]
 
+cat(paste("Calculate results for parameters \n"))
 # compile results
 sim_res <- data.frame(param = rownames(posterior_qs),
                       absolute_bias = NA,
@@ -183,10 +186,14 @@ for (i in 1:nrow(sim_res)) {
     sim_res$width.95[i] <- posterior_qs[tmp_param_name, "97.5%"] - posterior_qs[tmp_param_name, "2.5%"]
 }
 
+cat(paste("Extract mean preds \n"))
 # posterior observation means
 mod_pred_summary <- summary(stan_list$mod_stan,
                             pars = "preds",
                             probs = c(0.025, 0.1, 0.5, 0.9, 0.975))$summary[, c("2.5%", "10%", "50%", "90%", "97.5%")]
+
+cat(paste("Calculate results for mean preds \n"))
+
 mod_pred_50 <- matrix(mod_pred_summary[, "50%"], ncol = 2, byrow = TRUE)
 mod_pred_10 <- matrix(mod_pred_summary[, "10%"], ncol = 2, byrow = TRUE)
 mod_pred_90 <- matrix(mod_pred_summary[, "90%"], ncol = 2, byrow = TRUE)
@@ -212,8 +219,12 @@ mean_pred_res <- data.frame(param = "mean_preds",
                             coverage.95 = cov95_pred,
                             width.95 = width95_pred)
 
+cat(paste("Create results output \n"))
+
 # add onto results
 sim_res <- bind_rows(sim_res, mean_pred_res)
+
+cat(paste("Calculate stan diagnostics \n"))
 
 # stan diagnostics
 stan_diags <- data.frame(pct_divergent = get_num_divergent(stan_list$mod_stan)/(niter * nchains * prop_warmup),
