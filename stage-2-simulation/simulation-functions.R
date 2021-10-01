@@ -65,7 +65,8 @@ simulateData <- function(dgm_specs, Amat, scaling_factor, seed_re, seed_lik, tes
     all_par_names <- names(my_dgm)
     
     V_pars <- my_dgm[grep("V_", all_par_names, value = TRUE)]
-    if (length(unique(V_pars)) == 1) { # if all parameters are from the same model
+    V_pars_numeric <- suppressWarnings(as.numeric(V_pars))
+    if (length(unique(V_pars)) == 1 & sum(is.na(V_pars_numeric)) == length(V_pars_numeric)) { # if all parameters are from the same model
         this.V.mod <- unique(V_pars)
         V.array <- mod_lists[[this.V.mod]]$data$Sigma
     } else {
@@ -81,7 +82,7 @@ simulateData <- function(dgm_specs, Amat, scaling_factor, seed_re, seed_lik, tes
             }
             
             # correlation parameters are random uniform between bounds
-            V.array.tmp <- mod_lists[[corr_par]]$data$Sigma
+            V.array.tmp <- mod_lists[[1]]$data$Sigma
             num_corrs <- dim(V.array.tmp)[1]
             
             # set seed for these
