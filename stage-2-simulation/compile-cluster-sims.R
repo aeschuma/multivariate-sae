@@ -94,19 +94,27 @@ for (rn in 1:length(run_numbers)) {
 }
 
 if (!testing) {
-    # delete tmp files
-    setwd(paste0(savedir,"/tmp"))
-    sapply(c(resfiles, diagfiles), unlink)
-    setwd(paste0(savedir,"/../../out/stage-2-simulation"))
-    sapply(list.files(), unlink)
-    
-    # delete .pe and .po files
+
     if (root == "P:/") {
+        # delete tmp files
+        setwd(paste0(savedir,"/tmp"))
+        sapply(c(resfiles, diagfiles), unlink)
+        setwd(paste0(savedir,"/../../out/stage-2-simulation"))
+        sapply(list.files(), unlink)
+        
+        # delete .pe and .po files
         setwd(root)
         pe_po_files <- grep("s2sim_", list.files(), value = TRUE)
         sapply(pe_po_files, unlink)
     } else if (root == "/home/users/aeschuma/") {
-        setwd(root)
+        
+        # delete tmp files
+        tmp_del_res <- paste0(savedir,"/tmp/results*")
+        tmp_del_stan <- paste0(savedir,"/tmp/standiags*")
+        system(paste0("rm -f ", tmp_del_res))
+        system(paste0("rm -f ", tmp_del_stan))
+        
+        # delete .pe and .po files
         system("rm -f /home/users/aeschuma/s2sim_*")
     }
 }
