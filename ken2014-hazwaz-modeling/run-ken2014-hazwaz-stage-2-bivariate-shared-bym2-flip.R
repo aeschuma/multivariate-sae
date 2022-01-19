@@ -64,7 +64,7 @@ fit <- cmd_mod$sample(data = datlist,
                       adapt_delta = adapt_delta, max_treedepth = max_treedepth,
                       refresh =  0.1 * niter)
 mod.stan.bi.shared <- rstan::read_stan_csv(fit$output_files())
-params_to_extract <- c("beta", "sigma", "rho", "lambda")
+params_to_extract <- c("beta", "sigma", "rho", "lambda", "preds")
 re_params <- c("v_1", "v_2", "u_1", "u_2")
 
 # summaries

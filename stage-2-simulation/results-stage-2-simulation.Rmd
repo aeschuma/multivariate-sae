@@ -36,6 +36,8 @@ library(loo)
 res_run <- read_csv("results-run-info.csv")
 model_info <- read_csv("model-info.csv")
 dgm_info <- read_csv("dgm-info.csv")
+
+dropbox_dir <- "~/Dropbox/dissertation_2/survey-csmf/results/stage-2-simulation"
 ```
 
 # Overview
@@ -71,109 +73,182 @@ We will use a BYM2 parameterization for the spatial and IID random effects in ea
 
 where $v_{cr}^* \overset{iid}{\sim} N(0,1)$ is the unstructured random effect with fixed standard deviation 1 and $\bm{u}_{r}^*$ is the ICAR model scaled so $\mbox{Var}(u_{cr}^*) \approx 1$, which is done by scaling the model so the geometric mean of these variances is 1, using the adjacency matrix to calculate the inverse precision of the ICAR model as in Riebler (2016).
 
-We will present simulation results for different scenarios. Each scenario will have one of 4 (soon to be 7) different sets of parameter values (which may or may not have a shared component), and a Bayesian model that may or may not be correctly specified for the DGM.
+We will present simulation results for different scenarios. Each scenario will have data generated via specified parameter values (which may or may not have a shared component), and a Bayesian model fit to the data that may or may not be correctly specified for the DGM.
+
+All data will be the same size as the Kenya 2014 DHS (47 regions).
+
+The DGM parameters will be set equal to those estimated from models fit to the Kenya 2014 DHS HAZ/WAZ data. The nonshared models will have $\lambda = 0$.
+
+If a DGM has "random RE", this means that the random effects $v$ and $u$ were randomly generated for each simulation. If a DGM has "nonrandom RE", this means that the random effects $v$ and $u$ were the same across all simulations.
+
+For each scenario, we run 500 simulations.
 
 \newpage
 
-## Scenario 1
+# Results
 
-### Specification
+```{r, results = "asis"}
+# set dir to files dir
+setwd(dropbox_dir)
 
-This scenario will generate data from a DGM without a shared component, using parameters from a model fit to the Kenya 2014 DHS without a shared component. We will fit a model without a shared component. Thus, it is a correctly specified model for the DGM.
+# file list
+fs <- grep("results", list.files(), value = TRUE)
 
-Here's a table with the parameter values for the DGM
-
-```{r}
-
-# load parameter values
-tmp <- read_rds(paste0("~/Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/",
-                       dgm_info$V_corr_lower[dgm_info$dgm_number == res_run$dgm_number[res_run$run_number == 1]],
-                       ".rds"))
-params_to_extract <- c("beta", "sigma", "rho")
-tmp_summary <- summary(tmp$mod[[1]], pars = params_to_extract, probs = c(0.5))$summary[, "50%"]
-tmp_summary <- c(tmp_summary, lambda = 0)
-kable(tmp_summary, format = "markdown", digits = 3)
-```
-
-We will fit this model to the data:
-
-\eq{
-    \mu^{HAZ}_r &= \alpha_1 + \sigma_1(\sqrt{1 - \rho_1}v_{1r}^* + \sqrt{\rho_1}u_{1r}^*) \\
-    \mu^{WAZ}_r &= \alpha_2 + \sigma_2(\sqrt{1 - \rho_2}v_{2r}^* + \sqrt{\rho_2}u_{2r}^*) \\
-    v_{1r} &\overset{iid}{\sim} N(0, 1) \\
-    v_{2r} &\overset{iid}{\sim} N(0, 1) \\
-    \bm{u}_1 &\sim ICAR(1) \\
-    \bm{u}_2 &\sim ICAR(1) 
+## extract run number to name saved results
+run_numbers <- c()
+for (i in 1:length(fs)) {
+    run_numbers <- c(run_numbers,
+                     as.numeric(regmatches(fs[i], regexec("results-diags_run-\\s*(.*?)\\s*\\.Rdata", fs[i]))[[1]][2]))
 }
 
-We will put flat priors on the $\alpha_c$, $\mbox{Beta}(1, 1)$ priors on the $\rho_c$, and half-Normal(0, 1) priors on the $\sigma_c$.
+run_numbers <- sort(run_numbers)
 
-### Results
-
-```{r}
-# table of results
-load("~/Dropbox/dissertation_2/survey-csmf/results/stage-2-simulation/results-diags_run-1.Rdata")
-kable(results_comp, format = "markdown", digits = 3,
-      col.names = c("param", "mean abs bias", "mean rel bias", "mean cov 80%", "mean width 80%", "mean cov 95%", "mean width 95%"))
-```
-
-\newpage
-
-## Scenario 2
-
-### Specification
-
-This scenario will generate data from a DGM with a shared component, using parameters from a model fit to the Kenya 2014 DHS with a shared component. But we will fit a model without a shared component, thus it will be misspecified.
-
-Here's a table with the parameter values for the DGM
-
-```{r}
-
-# load parameter values
-tmp <- read_rds(paste0("~/Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/",
-                       dgm_info$V_corr_lower[dgm_info$dgm_number == res_run$dgm_number[res_run$run_number == 2]],
-                       ".rds"))
-params_to_extract <- c("beta", "sigma", "rho", "lambda")
-tmp_summary <- summary(tmp$mod[[1]], pars = params_to_extract, probs = c(0.5))$summary[, "50%"]
-kable(tmp_summary, format = "markdown", digits = 3)
-```
-
-We will fit this model to the data:
-
-\eq{
-    \mu^{HAZ}_r &= \alpha_1 + \sigma_1(\sqrt{1 - \rho_1}v_{1r}^* + \sqrt{\rho_1}u_{1r}^*) \\
-    \mu^{WAZ}_r &= \alpha_2 + \sigma_2(\sqrt{1 - \rho_2}v_{2r}^* + \sqrt{\rho_2}u_{2r}^*) \\
-    v_{1r} &\overset{iid}{\sim} N(0, 1) \\
-    v_{2r} &\overset{iid}{\sim} N(0, 1) \\
-    \bm{u}_1 &\sim ICAR(1) \\
-    \bm{u}_2 &\sim ICAR(1) 
+# read in results and display in tables
+tmps <- vector(mode = "list", length = length(run_numbers))
+which_runs <- which(run_numbers %in% c(2, 14))
+# which_runs <- 1:length(run_numbers)
+for (i in which_runs) {
+    # cat(paste(i, "\n"))
+    run_number <- run_numbers[i]
+    myfile <- paste0("results-diags_run-",run_number,".Rdata")
+    tmps[[i]] <- vector(mode = "list", length = 2)
+    load(myfile)
+    results_comp$param[results_comp$param == "mean_preds"] <- "latent means"
+    tmps[[i]][[1]] <- results_comp
+    tmps[[i]][[2]] <- diags_comp
+    rm(results_comp)
+    rm(diags_comp)
+    
+    modnum <- res_run$model_number[res_run$run_number == run_number]
+    dgmnum <- res_run$dgm_number[res_run$run_number == run_number]
+    
+    if (modnum == 1) modname <- "non-shared model, beta(1,1) prior on rho"
+    if (modnum == 2) modname <- "shared model, beta(1,1) prior on rho"
+    if (modnum == 3) modname <- "non-shared model, beta(3,3) prior on rho"
+    if (modnum == 4) modname <- "shared model, beta(3,3) prior on rho"
+    
+    if (dgmnum == 1) dgmname <- "random RE, no shared component, fixed V from 2014KDHS"
+    if (dgmnum == 2) dgmname <- "random RE, shared component, fixed V from 2014KDHS"
+    if (dgmnum == 3) dgmname <- "random RE, shared component, fixed sigma from 2014KDHS, fixed corr = 0"
+    if (dgmnum == 4) dgmname <- "random RE, shared component, fixed sigma 0.1 - 0.2, fixed corr from 2014KDHS"
+    if (dgmnum == 5) dgmname <- "random RE, shared component, fixed sigma = 0.001 - 0.002, fixed corr from 2014KDHS"
+    if (dgmnum == 6) dgmname <- "nonrandom RE, no shared component, fixed V from 2014KDHS"
+    if (dgmnum == 7) dgmname <- "nonrandom RE, shared component, fixed V from 2014KDHS"
+    if (dgmnum == 8) dgmname <- "nonrandom RE, shared component, fixed sigma from 2014KDHS, fixed corr = 0"
+    if (dgmnum == 9) dgmname <- "nonrandom RE, shared component, fixed sigma 0.1 - 0.2, fixed corr from 2014KDHS"
+    if (dgmnum == 10) dgmname <- "nonrandom RE, shared component, fixed sigma = 0.001 - 0.002, fixed corr from 2014KDHS"
+    if (dgmnum == 11) dgmname <- "random RE, shared component, fixed V from 2014KDHS"
+    if (dgmnum == 12) dgmname <- "nonrandom RE, shared component, fixed V from 2014KDHS"
+    
+    cat(paste0("## DGM: ", dgmname, "; Model: ", modname, "\n")) 
+    
+    print(kable(tmps[[i]][[1]], format = "markdown", caption = "Simulation results", digits = 3,
+                col.names = c("param", "mean bias", "rel bias", "cov 80", "width 80", 
+                              "cov 95", "width 95")))
+    print(kable(tmps[[i]][[2]], format = "markdown", caption = "Stan diagnostics"))
 }
 
-We will put flat priors on the $\alpha_c$, $\mbox{Beta}(1, 1)$ priors on the $\rho_c$, and half-Normal(0, 1) priors on the $\sigma_c$.
-
-### Results
-
-```{r}
-rm(results_comp)
-rm(diags_comp)
-
-# table of results
-load("~/Dropbox/dissertation_2/survey-csmf/results/stage-2-simulation/results-diags_run-1.Rdata")
-kable(results_comp, format = "markdown", digits = 3,
-      col.names = c("param", "mean abs bias", "mean rel bias", "mean cov 80%", "mean width 80%", "mean cov 95%", "mean width 95%"))
 ```
 
-\newpage
+<!-- ## Scenario 1 -->
 
-## Scenario 3
+<!-- ### Specification -->
 
-## Scenario 4
+<!-- This scenario will generate data from a DGM without a shared component, using parameters from a model fit to the Kenya 2014 DHS without a shared component. We will fit a model without a shared component. Thus, it is a correctly specified model for the DGM. -->
 
-## Scenario 5
+<!-- Here's a table with the parameter values for the DGM -->
 
-## Scenario 6
+<!-- ```{r} -->
 
-## Scenario 7
+<!-- # load parameter values -->
+<!-- tmp <- read_rds(paste0("~/Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/", -->
+<!--                        dgm_info$V_corr_lower[dgm_info$dgm_number == res_run$dgm_number[res_run$run_number == 1]], -->
+<!--                        ".rds")) -->
+<!-- params_to_extract <- c("beta", "sigma", "rho") -->
+<!-- tmp_summary <- summary(tmp$mod[[1]], pars = params_to_extract, probs = c(0.5))$summary[, "50%"] -->
+<!-- tmp_summary <- c(tmp_summary, lambda = 0) -->
+<!-- kable(tmp_summary, format = "markdown", digits = 3) -->
+<!-- ``` -->
 
-## Scenario 8
+<!-- We will fit this model to the data: -->
+
+<!-- \eq{ -->
+<!--     \mu^{HAZ}_r &= \alpha_1 + \sigma_1(\sqrt{1 - \rho_1}v_{1r}^* + \sqrt{\rho_1}u_{1r}^*) \\ -->
+<!--     \mu^{WAZ}_r &= \alpha_2 + \sigma_2(\sqrt{1 - \rho_2}v_{2r}^* + \sqrt{\rho_2}u_{2r}^*) \\ -->
+<!--     v_{1r} &\overset{iid}{\sim} N(0, 1) \\ -->
+<!--     v_{2r} &\overset{iid}{\sim} N(0, 1) \\ -->
+<!--     \bm{u}_1 &\sim ICAR(1) \\ -->
+<!--     \bm{u}_2 &\sim ICAR(1)  -->
+<!-- } -->
+
+<!-- We will put flat priors on the $\alpha_c$, $\mbox{Beta}(1, 1)$ priors on the $\rho_c$, and half-Normal(0, 1) priors on the $\sigma_c$. -->
+
+<!-- ### Results -->
+
+<!-- ```{r} -->
+<!-- # table of results -->
+<!-- load("~/Dropbox/dissertation_2/survey-csmf/results/stage-2-simulation/results-diags_run-1.Rdata") -->
+<!-- kable(results_comp, format = "markdown", digits = 3, -->
+<!--       col.names = c("param", "mean abs bias", "mean rel bias", "mean cov 80%", "mean width 80%", "mean cov 95%", "mean width 95%")) -->
+<!-- ``` -->
+
+<!-- \newpage -->
+
+<!-- ## Scenario 2 -->
+
+<!-- ### Specification -->
+
+<!-- This scenario will generate data from a DGM with a shared component, using parameters from a model fit to the Kenya 2014 DHS with a shared component. But we will fit a model without a shared component, thus it will be misspecified. -->
+
+<!-- Here's a table with the parameter values for the DGM -->
+
+<!-- ```{r} -->
+
+<!-- # load parameter values -->
+<!-- tmp <- read_rds(paste0("~/Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/", -->
+<!--                        dgm_info$V_corr_lower[dgm_info$dgm_number == res_run$dgm_number[res_run$run_number == 2]], -->
+<!--                        ".rds")) -->
+<!-- params_to_extract <- c("beta", "sigma", "rho", "lambda") -->
+<!-- tmp_summary <- summary(tmp$mod[[1]], pars = params_to_extract, probs = c(0.5))$summary[, "50%"] -->
+<!-- kable(tmp_summary, format = "markdown", digits = 3) -->
+<!-- ``` -->
+
+<!-- We will fit this model to the data: -->
+
+<!-- \eq{ -->
+<!--     \mu^{HAZ}_r &= \alpha_1 + \sigma_1(\sqrt{1 - \rho_1}v_{1r}^* + \sqrt{\rho_1}u_{1r}^*) \\ -->
+<!--     \mu^{WAZ}_r &= \alpha_2 + \sigma_2(\sqrt{1 - \rho_2}v_{2r}^* + \sqrt{\rho_2}u_{2r}^*) \\ -->
+<!--     v_{1r} &\overset{iid}{\sim} N(0, 1) \\ -->
+<!--     v_{2r} &\overset{iid}{\sim} N(0, 1) \\ -->
+<!--     \bm{u}_1 &\sim ICAR(1) \\ -->
+<!--     \bm{u}_2 &\sim ICAR(1)  -->
+<!-- } -->
+
+<!-- We will put flat priors on the $\alpha_c$, $\mbox{Beta}(1, 1)$ priors on the $\rho_c$, and half-Normal(0, 1) priors on the $\sigma_c$. -->
+
+<!-- ### Results -->
+
+<!-- ```{r} -->
+<!-- rm(results_comp) -->
+<!-- rm(diags_comp) -->
+
+<!-- # table of results -->
+<!-- load("~/Dropbox/dissertation_2/survey-csmf/results/stage-2-simulation/results-diags_run-1.Rdata") -->
+<!-- kable(results_comp, format = "markdown", digits = 3, -->
+<!--       col.names = c("param", "mean abs bias", "mean rel bias", "mean cov 80%", "mean width 80%", "mean cov 95%", "mean width 95%")) -->
+<!-- ``` -->
+
+<!-- \newpage -->
+
+<!-- ## Scenario 3 -->
+
+<!-- ## Scenario 4 -->
+
+<!-- ## Scenario 5 -->
+
+<!-- ## Scenario 6 -->
+
+<!-- ## Scenario 7 -->
+
+<!-- ## Scenario 8 -->
 

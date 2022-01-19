@@ -37,9 +37,13 @@ simulateData <- function(dgm_specs, Amat, scaling_factor, seed_re, seed_lik, tes
     }
     
     n_regions <- nrow(Amat)
+    n_cause <- 2
+    n_obs <- n_regions * n_cause
     
     # load dgm data
     my_dgm <- dgm_specs %>% unlist()
+    one_precise_one_not <- my_dgm["one_precise_one_not"]
+    my_dgm <- my_dgm[!(names(my_dgm) == "one_precise_one_not")]
     
     # load models to pull from 
     numeric_pars <- suppressWarnings(as.numeric(my_dgm))
@@ -82,8 +86,7 @@ simulateData <- function(dgm_specs, Amat, scaling_factor, seed_re, seed_lik, tes
             }
             
             # correlation parameters are random uniform between bounds
-            V.array.tmp <- mod_lists[[1]]$data$Sigma
-            num_corrs <- dim(V.array.tmp)[1]
+            num_corrs <- n_regions
             
             # set seed for these
             set.seed(1)
@@ -114,18 +117,25 @@ simulateData <- function(dgm_specs, Amat, scaling_factor, seed_re, seed_lik, tes
         vdiag_pars_num <- suppressWarnings(as.numeric(vdiag_pars))
         names(vdiag_pars_num) <- names(vdiag_pars)
         
-        if (sum(is.na(vdiag_pars_num)) == 0) { # if V diagonal parameters are numeric
+        if (one_precise_one_not) {
+            if (vdiag_pars_num["V_diag_lower"] > vdiag_pars_num["V_diag_upper"]) {
+                stop("V diagonal lower bound (precise) is larger than upper bound (imprecise)!")
+            }
+            
+            my.diag.mat <- array(NA, dim = c(n_regions, n_cause, n_cause))
+            for (jj in 1:dim(my.diag.mat)[1]) {
+                my.diag.mat[jj,,] <- diag(vdiag_pars_num, 
+                                          nrow = 2, ncol = 2)
+            }
+        } else if (sum(is.na(vdiag_pars_num)) == 0) { # if V diagonal parameters are numeric
             
             if (vdiag_pars_num["V_diag_lower"] > vdiag_pars_num["V_diag_upper"]) {
                 stop("V diagonal lower bound is larger than upper bound!")
             }
-            
-            # V diagonal parameters are random uniform between bounds
-            V.array.tmp <- mod_lists[[corr_par]]$data$Sigma
-            
+
             # set seed for these
             set.seed(2)
-            my.diag.mat <- array(NA, dim = dim(V.array.tmp))
+            my.diag.mat <- array(NA, dim = c(n_regions, n_cause, n_cause))
             for (jj in 1:dim(my.diag.mat)[1]) {
                 my.diag.mat[jj,,] <- diag(runif(2, vdiag_pars_num["V_diag_lower"], vdiag_pars_num["V_diag_upper"]), 
                                           nrow = 2, ncol = 2)

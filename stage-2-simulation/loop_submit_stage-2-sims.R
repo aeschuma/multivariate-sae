@@ -49,7 +49,7 @@ setwd(wd)
 model_to_run <- c(1, 2)
 # model_to_run <- 3:4
 # dgm_to_run <- c(1, 2)
-dgm_to_run <- c(3, 8)
+dgm_to_run <- c(3, 8, 15, 16)
 
 ## STAN options
 niter <- 10000

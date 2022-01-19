@@ -73,7 +73,7 @@ if (testing) {
     m_number <- 2
     
     ## data generation options
-    dgm <- 3
+    dgm <- 15
     
     ## stan options
     niter <- 5000

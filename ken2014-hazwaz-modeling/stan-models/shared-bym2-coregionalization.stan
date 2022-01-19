@@ -54,7 +54,7 @@ model {
     v_1 ~ normal(0, 1); // IID normal REs on region
     v_2 ~ normal(0, 1); // IID normal REs on region
 
-    lambda ~ normal(0, 1);
+    lambda ~ normal(0, 100);
     
     // beta ~ normal(0,5);
 }
