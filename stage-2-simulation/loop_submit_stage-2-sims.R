@@ -92,7 +92,7 @@ for (a in model_to_run) {
                                 } else {
                                     script <- "qsub-stage-2-sims.sh" 
                                 }
-                                sub <- paste0("qsub -l h=\"b34|b35|b36|b37\" -pe local ", d, " -v ",
+                                sub <- paste0("qsub -l h=\"biostat-b34|biostat-b35|biostat-b36|biostat-b37\" -pe local ", d, " -v ",
                                               "a=",a,
                                               ",b=",b,
                                               ",c=",c,
