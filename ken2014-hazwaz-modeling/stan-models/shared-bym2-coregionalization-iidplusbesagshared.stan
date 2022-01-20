@@ -31,7 +31,7 @@ transformed parameters {
     convolved_re_2 =  (sqrt(1 - rho[2]) * v_2) + (sqrt(rho[2] / scaling_factor) * u_2);
     
     for (i in 1:R) {
-         mu[i, 1] = beta[1] + convolved_re_1[regions[i]] * sigma[1] + (lambda * u_2[regions[i]]); //
+         mu[i, 1] = beta[1] + convolved_re_1[regions[i]] * sigma[1] + (lambda * convolved_re_2[regions[i]] * sigma[2]); //
          mu[i, 2] = beta[2] + convolved_re_2[regions[i]] * sigma[2]; // recall that the convolved RE includes z = u_2 / delta
     }
 }

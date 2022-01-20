@@ -18,6 +18,9 @@ library(tidyverse)
 library(spdep)
 library(INLA)
 library(knitr)
+library(rstan)
+library(cmdstanr)
+library(GGally)
 
 set.seed(858)
 
@@ -63,58 +66,6 @@ for(i in 1:n_regions) {
     V.list[[admin1.tmp]] <- V.tmp
     V.array[i, , ] <- V.tmp
     
-    # FOR DOING THIS BY HAND:
-    {
-        ## STEP 0: subtract the overall (over the entire region) survey-weighted mean HAZ and WAZ scores
-        x.all <- tmp$variables[, c("HAZ", "WAZ")]
-        pweights <- tmp$variables$weights
-        psum <- sum(pweights)
-        average<-colSums(x.all*pweights/psum)
-        centered.x.all <-sweep(x.all, 2, average)
-        
-        ## STEP 1: multiply centered HAZ and WAZ scores by survey weight, divide by sum of all weights in the region (for all observations)
-        centered.weighted.x.all <- centered.x.all * pweights/psum
-        
-        # Loop through strata (it's a tapply that's summed at the end in the original code)
-        strata <- unique(tmp$strata$strata)
-        output <- vector(mode = "list", length = length(strata))
-        for (ss in 1:length(strata)) {
-            index <- which(tmp$strata$strata == strata[ss])
-            x <- centered.weighted.x.all[index,]
-            cluster <- tmp$cluster$cluster[index]
-            nPSU <- as.vector(tmp$fpc$sampsize)[index]
-            fpc <- NULL
-            f<-rep(1,NROW(x))
-            scale <- ifelse(nPSU>1, f*nPSU/(nPSU-1), f)
-            
-            scale<-scale[!duplicated(cluster)]
-            
-            ## STEP 2a: sum all of the x's (which are HAZ and WAZ multiplied by survey weights and divided by the sum of all) 
-            ##              within each cluster cluster.
-            ##              This gives one measure of summed HAZ and WAZ for each cluster.
-            ## STEP 2b: Then, subtract the stratum-specific mean HAZ and mean WAZ
-            
-            # 2a
-            x<-rowsum(x,cluster)
-            
-            # 2b
-            x <- sweep(x, 2, colMeans(x), "-")
-            
-            ## STEP 3: takes the crossproduct, which multiplies (off diagonal) or squares (diagonal) the summed and centered 
-            ##            weight adjusted HAZ and WAZ score contributions
-            ##            Then multiplies each by a scale factor
-            ##         The scale factor is: with n = number of sampled clusters in this strata, n/(n-1) 
-            ##         -- given no finite population correction (fpc). If there's an fpc, also multiply by (popsize-nPSU)/popsize
-            output[[ss]] <- crossprod(as.matrix(x)*sqrt(scale))
-            
-        }
-        nstrat<-length(unique(strata))
-        nokstrat<-sum(sapply(output,function(m) !any(is.na(m))))
-        V.tmp.2 <- apply(array(unlist(output),c(2,2,length(output))),1:2,sum,na.rm=TRUE)*nstrat/nokstrat
-        
-        V.array.2[i, , ] <- V.tmp.2
-    }
-    
     results$seHAZ.bi[index.tmp] <- V.tmp[1, 1]^0.5
     results$seWAZ.bi[index.tmp] <- V.tmp[2, 2]^0.5
     
@@ -151,7 +102,7 @@ for (i in 1:length(V.list))  {
 }
 Vdes_prec <- bdiag(diag.list)
 
-# Old way; nonshared
+# Old way; nonshared iid ####
 
 # priors
 fe.prec <- list(prec.intercept = 0,
@@ -181,38 +132,40 @@ smooth.direct.bi <- inla(m.form,
 smooth.direct.bi$summary.fixed
 smooth.direct.bi$summary.hyperpar
 
-# leigh's way: nonshared
+# leigh's way: nonshared iid ####
 data <- as.list(results.long)
 Nt <- length(unique(results.long$admin1))
 N <- nrow(results.long)
+data$weights <- rep(1, N)
+
 ## Define the index-vectors ii.1 ii.2 etc, which are the
 ## index's for the iid2d-model at timepoint 1, 2, ...
 for(j in 1:Nt) {
-    itmp = numeric(N)
-    itmp[] = NA
-    itmp[j] = 1
-    itmp[j+Nt] = 2
-    data = c(list(itmp), data)
-    names(data)[1] = paste("ii.", j, sep="")
+    itmp <-  numeric(N)
+    itmp[] <-  NA
+    itmp[j] <-  1
+    itmp[j+Nt] <-  2
+    data <-  c(list(itmp), data)
+    names(data)[1] <-  paste("ii.", j, sep="")
 }
 
 ## we now have to add one 'iid2d' model for each observation pair,
 ## since their cov.matrix is different. we have to do this
 ## automatically... here I add numbers directly for simplicity
-add=""
+add <- ""
 for(j in 1:Nt) {
-    corr = yGt[j, "covlECt.hat"]/sqrt(prod(yGt[j, c("var.lEt.hat", "var.lCt.hat")]))
-    init.precE = log(1/yGt[j, "var.lEt.hat"])
-    init.precC = log(1/yGt[j, "var.lCt.hat"])
+    corr <-  results$corr.bi[j]
+    init.prec.haz <-  log(1/results$seHAZ.bi[j]^2)
+    init.prec.waz <-  log(1/results$seWAZ.bi[j]^2)
     
-    add = paste(add, paste(" + 
-                         f(", paste("ii.", j, sep=""), ", weights, model=\"iid2d\", n=2,
+    add <-  paste(add, paste(" + 
+                         f(", paste("ii.", j, sep=""), ", model=\"iid2d\", n=2,
                          hyper = list(
                          prec1 = list(
-                         initial =", init.precE,", 
+                         initial =", init.prec.haz,", 
                          fixed = TRUE),
                          prec2 = list(
-                         initial =", init.precC,", 
+                         initial =", init.prec.waz,", 
                          fixed = TRUE),
                          cor = list(
                          initial = log((1+", corr, ")/(1-", corr, ")), 
@@ -220,26 +173,481 @@ for(j in 1:Nt) {
     
 }
 
-
-
-## define hyper parameters
-hypers=c(list(prec = list(param = c(10, 1e-2) )), 
-         list(prec = list(param = c(10, 1e-2) ))  )
-
-## Model
-S1=matrix(1:Nt, ncol=Nt, nrow=1)
-formula.lGt = lGt ~ -1 + interE + interC + f(wkE, model="rw2", hyper=hypers[1], scale.model=F, constr=T, extraconstr=list(A=S1, e=0)) + f(wkC, model="rw2", hyper=hypers[2], scale.model=F, constr=T, extraconstr=list(A=S1, e=0)) + wkE2 + wkC2 + tempE + tempC
-
-## Add iid2d pair to formula
-formula.lGt=update(formula.lGt, as.formula(paste(". ~ . ", add)))
-
+## Model formula
+formula.iid2d <-  formula(paste("value ~ -1 + outcome + f(admin1.haz, model = 'iid', hyper = iid.prior) + f(admin1.waz, model = 'iid', hyper = iid.prior) + ",
+                        paste(add, collapse = " ")))
 
 ## Fit model
-mod= inla(formula.lGt, data=data, 
+mod.leigh <- inla(formula.iid2d, data = data, 
           family = "gaussian",
           control.family = list(hyper = list(prec = list(initial = 10, fixed=T))), 
-          control.predictor=list(compute=T),
-          control.compute=list(config=T),
-          control.inla=list(lincomb.derived.correlation.matrix=T),
-          control.fixed=list(prec=list(default=0.001), correlation.matrix=T) )
+          control.predictor = list(compute=T),
+          control.compute = list(config=T),
+          control.inla = list(lincomb.derived.correlation.matrix=T),
+          control.fixed = list(prec = list(default = 0.001), correlation.matrix=T) )
 
+mod.leigh.2 <- inla(formula.iid2d, data = data, 
+                    family = "gaussian",
+                    control.family = list(hyper = list(prec = list(initial = log(1), fixed=T))), 
+                    control.predictor = list(compute=TRUE),
+                    control.compute = list(config=TRUE),
+                    control.fixed = fe.prec,
+                    scale = 1000000)
+
+# stan nonshared iid ####
+sigma_normal_sd <- 1
+
+datlist <- list(R = n_regions,
+                regions = results$admin1,
+                Sigma = V.array,
+                y = results[, c("meanHAZ.bi", "meanWAZ.bi")],
+                sigma_normal_sd = sigma_normal_sd)
+
+stan_file <- "../ken2014-hazwaz-modeling/stan-models/nonshared-iid.stan"
+
+## stan options
+niter <- 10000
+nchains <- 3
+prop_warmup <- 0.5
+max_treedepth <- 100
+adapt_delta <- 0.8
+nthin <- 1
+options(mc.cores = parallel::detectCores())
+
+cmd_mod <- cmdstan_model(stan_file = stan_file)
+fit <- cmd_mod$sample(data = datlist,
+                      iter_warmup = niter*prop_warmup, iter_sampling = niter*(1-prop_warmup),
+                      chains = nchains, thin = nthin,
+                      adapt_delta = adapt_delta, max_treedepth = max_treedepth,
+                      refresh =  0.1 * niter)
+mod.stan.bi.nonshared.iid <- rstan::read_stan_csv(fit$output_files())
+
+stan_diag(mod.stan.bi.nonshared.iid)
+stan_diags <- data.frame(pct_divergent = get_num_divergent(mod.stan.bi.nonshared.iid)/(niter * nchains * prop_warmup),
+                         pct_max_tree_exceeded = get_num_max_treedepth(mod.stan.bi.nonshared.iid)/(niter * prop_warmup * nchains),
+                         pct_bmfi_low_chains = sum(is.finite(get_low_bfmi_chains(mod.stan.bi.nonshared.iid)))/nchains)
+stan_diags
+traceplot(mod.stan.bi.nonshared.iid, pars = c("beta", "sigma"))
+
+params_to_extract <- c("beta", "sigma", "preds")
+re_params <- c("v_1", "v_2", "u_1", "u_2")
+
+# compare results
+mod.stan.summary.bi.nonshared.iid <- summary(mod.stan.bi.nonshared.iid,
+                                         pars = params_to_extract[params_to_extract != "preds"],
+                                         probs = c(0.025, 0.5, 0.975))
+
+kable(mod.stan.summary.bi.nonshared.iid$summary, format = "markdown", digits = 3)
+
+# compare
+mod.leigh$summary.fixed
+1/sqrt(mod.leigh$summary.hyperpar[, c("0.025quant", "0.5quant", "0.975quant")])
+
+mod.leigh.2$summary.fixed
+mod.leigh.2$summary.hyperpar
+
+smooth.direct.bi$summary.fixed
+smooth.direct.bi$summary.hyperpar
+
+# compare random effects
+stan.re.summary <- summary(mod.stan.bi.nonshared.iid, pars = c("gamma_1", "gamma_2"), probs = c(0.025, 0.5, 0.975))$summary[,c("2.5%", "50%", "97.5%")]
+inla.re.summary <- rbind(mod.leigh$summary.random[c("admin1.haz")][[1]],
+                         mod.leigh$summary.random[c("admin1.waz")][[1]])
+inla2.re.summary <- rbind(mod.leigh.2$summary.random[c("admin1.haz")][[1]],
+                          mod.leigh.2$summary.random[c("admin1.waz")][[1]])
+
+res.median.re <- tibble(inla = inla.re.summary$`0.5quant`,
+                        inla.2 = inla2.re.summary$`0.5quant`,
+                        stan = stan.re.summary[,"50%"])
+
+pairs.med <- ggpairs(res.median.re) +
+  theme_light()
+for (i in 2:pairs.med$nrow) {
+  for (j in 1:(i-1)) {
+    pairs.med[i,j] <- pairs.med[i,j] + geom_abline(intercept = 0,slope = 1, col = "darkgreen")
+  }
+}
+pairs.med
+
+res.width <- tibble(inla = inla.re.summary$`0.975quant` - inla.re.summary$`0.025quant`,
+                    inla.2 = inla2.re.summary$`0.975quant` - inla2.re.summary$`0.025quant`,
+                    stan = stan.re.summary[,"97.5%"] - stan.re.summary[,"2.5%"])
+
+pairs.width <- ggpairs(res.width) +
+  theme_light()
+for (i in 2:pairs.width$nrow) {
+  for (j in 1:(i-1)) {
+    pairs.width[i,j] <- pairs.width[i,j] + geom_abline(intercept = 0,slope = 1, col = "darkgreen")
+  }
+}
+pairs.width
+
+# compare predictions
+summary(mod.stan.bi.nonshared.iid, pars = "preds", probs = c(0.025, 0.5, 0.975))$summary[,c("2.5%", "50%", "97.5%")]
+mod.leigh$summary.fitted.values
+
+res.median <- tibble(inla = mod.leigh$summary.fitted.values$`0.5quant`,
+                     inla.2 = mod.leigh.2$summary.fitted.values$`0.5quant`,
+                     stan = summary(mod.stan.bi.nonshared.iid, pars = "preds", probs = c(0.5))$summary[, "50%"])
+
+pairs.med <- ggpairs(res.median) +
+  theme_light()
+for (i in 2:pairs.med$nrow) {
+  for (j in 1:(i-1)) {
+    pairs.med[i,j] <- pairs.med[i,j] + geom_abline(intercept = 0,slope = 1, col = "darkgreen")
+  }
+}
+pairs.med
+
+res.width <- tibble(inla = mod.leigh$summary.fitted.values$`0.975quant` - mod.leigh$summary.fitted.values$`0.025quant`,
+                    inla.2 = mod.leigh.2$summary.fitted.values$`0.975quant` - mod.leigh.2$summary.fitted.values$`0.025quant`,
+                    stan = summary(mod.stan.bi.nonshared.iid, pars = "preds", probs = c(0.975))$summary[, "97.5%"] - summary(mod.stan.bi.nonshared.iid, pars = "preds", probs = c(0.025))$summary[, "2.5%"])
+
+pairs.width <- ggpairs(res.width) +
+  theme_light()
+for (i in 2:pairs.width$nrow) {
+  for (j in 1:(i-1)) {
+    pairs.width[i,j] <- pairs.width[i,j] + geom_abline(intercept = 0,slope = 1, col = "darkgreen")
+  }
+}
+pairs.width
+
+
+
+# nonshared BYM2 old way ####
+
+# priors
+bym2_prior <- list(phi=list(prior="logitbeta", param=c(1, 1), initial=0.5), 
+                   prec=list(prior="pc.prec", param=c(1, 0.01), initial=5))
+
+# model formula
+m.form <- value ~ -1 + outcome + 
+  f(admin1.haz, model = 'bym2',
+    graph = admin1.mat, 
+    scale.model = T, 
+    constr = T,
+    hyper = bym2_prior) +
+  f(admin1.waz, model = 'bym2',
+    graph = admin1.mat, 
+    scale.model = T, 
+    constr = T,
+    hyper = bym2_prior) +
+  f(obs,  model='generic0', Cmatrix = Vdes_prec,
+    hyper = cov_prior)
+
+# fit model
+smooth.direct.bi.nonshared <- inla(m.form,
+                                data = results.long,
+                                family = "gaussian",
+                                control.fixed = fe.prec,
+                                control.predictor=list(compute=TRUE),
+                                control.compute=list(config = TRUE),
+                                control.family = list(hyper = list(prec = list(initial = log(1), fixed=TRUE))),
+                                scale = 1000000)
+smooth.direct.bi.nonshared$summary.fixed
+smooth.direct.bi.nonshared$summary.hyperpar
+
+# nonshared bym2 leigh's way ####
+data$admin1.haz.iid <- data$admin1.haz
+data$admin1.waz.iid <- data$admin1.waz
+
+## Model formula
+formula.iid2d <-  formula(paste("value ~ -1 + outcome + f(admin1.haz, model = 'bym2',
+    graph = admin1.mat, 
+    scale.model = T, 
+    constr = T,
+    hyper = bym2_prior) +
+  f(admin1.waz, model = 'bym2',
+    graph = admin1.mat, 
+    scale.model = T, 
+    constr = T,
+    hyper = bym2_prior)",
+                                paste(add, collapse = " ")))
+
+## Fit model
+mod.leigh.nonshared <- inla(formula.iid2d, data = data, 
+                  family = "gaussian",
+                  control.family = list(hyper = list(prec = list(initial = 10, fixed=T))), 
+                  control.predictor = list(compute=T),
+                  control.compute = list(config=T),
+                  control.inla = list(lincomb.derived.correlation.matrix=T),
+                  control.fixed = list(prec = list(default = 0.001), correlation.matrix=T) )
+
+mod.leigh.2.nonshared <- inla(formula.iid2d, data = data, 
+                    family = "gaussian",
+                    control.family = list(hyper = list(prec = list(initial = log(1), fixed=T))), 
+                    control.predictor = list(compute=TRUE),
+                    control.compute = list(config=TRUE),
+                    control.fixed = fe.prec,
+                    scale = 1000000)
+
+formula.iid2d.alt <- formula(paste("value ~ -1 + outcome + 
+  f(admin1.haz, model = 'besag',
+    graph = admin1.mat, 
+    scale.model = T, 
+    constr = T,
+    hyper = besag_prior) +
+  f(admin1.haz.iid, model = 'iid') +
+  f(admin1.waz, model = 'besag',
+    graph = admin1.mat, 
+    scale.model = T, 
+    constr = T,
+    hyper = besag_prior) +
+  f(admin1.waz.iid, model = 'iid') ",
+                                   paste(add, collapse = " ")))
+
+mod.leigh.3.nonshared <- inla(formula.iid2d.alt, data = data, 
+                           family = "gaussian",
+                           control.family = list(hyper = list(prec = list(initial = 10, fixed=T))), 
+                           control.predictor = list(compute=T),
+                           control.compute = list(config=T),
+                           control.inla = list(lincomb.derived.correlation.matrix=T),
+                           control.fixed = list(prec = list(default = 0.001), correlation.matrix=T) )
+
+# STAN nonshared bym2 to compare ####
+rho_beta_1 <- 1
+rho_beta_2 <- 1
+sigma_normal_sd <- 1
+
+datlist <- list(R = n_regions,
+                regions = results$admin1,
+                Sigma = V.array,
+                y = results[, c("meanHAZ.bi", "meanWAZ.bi")],
+                N_edges = node.info$n_edges,
+                node1 = node.info$node1,
+                node2 = node.info$node2,
+                scaling_factor = scaling_factor,
+                rho_beta_1 = rho_beta_1,
+                rho_beta_2 = rho_beta_2,
+                sigma_normal_sd = sigma_normal_sd)
+
+stan_file <- "../ken2014-hazwaz-modeling/stan-models/nonshared-bym2.stan"
+
+## stan options
+niter <- 10000
+nchains <- 3
+prop_warmup <- 0.5
+max_treedepth <- 100
+adapt_delta <- 0.8
+nthin <- 1
+options(mc.cores = parallel::detectCores())
+
+cmd_mod <- cmdstan_model(stan_file = stan_file)
+fit <- cmd_mod$sample(data = datlist,
+                      iter_warmup = niter*prop_warmup, iter_sampling = niter*(1-prop_warmup),
+                      chains = nchains, thin = nthin,
+                      adapt_delta = adapt_delta, max_treedepth = max_treedepth,
+                      refresh =  0.1 * niter)
+mod.stan.bi.nonshared <- rstan::read_stan_csv(fit$output_files())
+params_to_extract <- c("beta", "sigma", "rho", "preds")
+re_params <- c("v_1", "v_2", "u_1", "u_2")
+
+# compare results
+mod.stan.summary.bi.nonshared <- summary(mod.stan.bi.nonshared,
+                                      pars = params_to_extract[params_to_extract != "preds"],
+                                      probs = c(0.025, 0.5, 0.975))
+kable(mod.stan.summary.bi.nonshared$summary, format = "markdown", digits = 3)
+
+mod.leigh.nonshared$summary.fixed
+mod.leigh.nonshared$summary.hyperpar
+
+mod.leigh.2.nonshared$summary.fixed
+mod.leigh.2.nonshared$summary.hyperpar
+
+mod.leigh.3.nonshared$summary.fixed
+mod.leigh.3.nonshared$summary.hyperpar
+
+# shared bym2 leigh ####
+data$admin1.haz.2 <- data$admin1.haz
+
+lambda_prior <- list(beta = list(prior = 'logtnormal', param = c(0, 1)))
+besag_prior <- list(prec=list(prior="pc.prec", param=c(1, 0.01), initial=5))
+iid_prior <- list(prec=list(prior="pc.prec", param=c(0.1, 0.1), initial=5))
+
+## Model formula
+formula.iid2d <-  formula(paste("value ~ -1 + outcome + f(admin1.haz, model = 'bym2',
+    graph = admin1.mat, 
+    scale.model = T, 
+    constr = T,
+    hyper = bym2_prior) +
+  f(admin1.waz, model = 'bym2',
+    graph = admin1.mat, 
+    scale.model = T, 
+    constr = T,
+    hyper = bym2_prior) +
+  f(admin1.haz.2, copy = \"admin1.waz\", fixed = FALSE, hyper = lambda_prior)",
+                                paste(add, collapse = " ")))
+
+## Fit model
+mod.leigh.shared <- inla(formula.iid2d, data = data, 
+                         family = "gaussian",
+                         control.family = list(hyper = list(prec = list(initial = 10, fixed=T))), 
+                         control.predictor = list(compute=T),
+                         control.compute = list(config=T),
+                         control.inla = list(lincomb.derived.correlation.matrix=T),
+                         control.fixed = list(prec = list(default = 0.001), correlation.matrix=T) )
+
+mod.leigh.2.shared <- inla(formula.iid2d, data = data, 
+                           family = "gaussian",
+                           control.family = list(hyper = list(prec = list(initial = log(1), fixed=T))), 
+                           control.predictor = list(compute=TRUE),
+                           control.compute = list(config=TRUE),
+                           control.fixed = fe.prec,
+                           scale = 1000000)
+
+formula.iid2d.alt <- formula(paste("value ~ -1 + outcome + 
+  f(admin1.haz, model = 'besag',
+    graph = admin1.mat, 
+    scale.model = T, 
+    constr = T,
+    hyper = besag_prior) +
+  f(admin1.haz.iid, model = 'iid', hyper = iid_prior) +
+  f(admin1.waz, model = 'besag',
+    graph = admin1.mat, 
+    scale.model = T, 
+    constr = T,
+    hyper = besag_prior) +
+  f(admin1.waz.iid, model = 'iid', hyper = iid_prior) +
+  f(admin1.haz.2, copy = \"admin1.waz\", fixed = FALSE, hyper = lambda_prior)" ,
+                                   paste(add, collapse = " ")))
+
+mod.leigh.3.shared <- inla(formula.iid2d.alt, data = data, 
+                           family = "gaussian",
+                           control.family = list(hyper = list(prec = list(initial = 10, fixed=T))), 
+                           control.predictor = list(compute=T),
+                           control.compute = list(config=T),
+                           control.inla = list(lincomb.derived.correlation.matrix=T),
+                           control.fixed = list(prec = list(default = 0.001), correlation.matrix=T) )
+
+# shared bym2 STAN JUST SHARED SPATIAL####
+datlist <- list(R = n_regions,
+                regions = results$admin1,
+                Sigma = V.array,
+                y = results[, c("meanHAZ.bi", "meanWAZ.bi")],
+                N_edges = node.info$n_edges,
+                node1 = node.info$node1,
+                node2 = node.info$node2,
+                scaling_factor = scaling_factor,
+                rho_beta_1 = rho_beta_1,
+                rho_beta_2 = rho_beta_2,
+                sigma_normal_sd = sigma_normal_sd)
+
+stan_file <- "../ken2014-hazwaz-modeling/stan-models/shared-bym2-coregionalization.stan"
+
+## stan options
+niter <- 10000
+nchains <- 3
+prop_warmup <- 0.5
+max_treedepth <- 100
+adapt_delta <- 0.8
+nthin <- 1
+options(mc.cores = parallel::detectCores())
+
+cmd_mod <- cmdstan_model(stan_file = stan_file)
+fit <- cmd_mod$sample(data = datlist,
+                      iter_warmup = niter*prop_warmup, iter_sampling = niter*(1-prop_warmup),
+                      chains = nchains, thin = nthin,
+                      adapt_delta = adapt_delta, max_treedepth = max_treedepth,
+                      refresh =  0.1 * niter)
+mod.stan.bi.shared <- rstan::read_stan_csv(fit$output_files())
+params_to_extract <- c("beta", "sigma", "rho", "lambda")
+re_params <- c("v_1", "v_2", "u_1", "u_2")
+mod.stan.summary.bi.shared <- summary(mod.stan.bi.shared,
+                                      pars = params_to_extract,
+                                      probs = c(0.025, 0.5, 0.975))
+
+# shared bym2 STAN SHARED SPATIAL + IID####
+stan_file <- "../ken2014-hazwaz-modeling/stan-models/shared-bym2-coregionalization-iidplusbesagshared.stan"
+
+cmd_mod <- cmdstan_model(stan_file = stan_file)
+fit <- cmd_mod$sample(data = datlist,
+                      iter_warmup = niter*prop_warmup, iter_sampling = niter*(1-prop_warmup),
+                      chains = nchains, thin = nthin,
+                      adapt_delta = adapt_delta, max_treedepth = max_treedepth,
+                      refresh =  0.1 * niter)
+mod.stan.bi.shared.iisplusbesag <- rstan::read_stan_csv(fit$output_files())
+mod.stan.summary.bi.shared.iisplusbesag <- summary(mod.stan.bi.shared.iisplusbesag,
+                                      pars = params_to_extract,
+                                      probs = c(0.025, 0.5, 0.975))
+# compare results
+kable(mod.stan.summary.bi.shared$summary, format = "markdown", digits = 3)
+kable(mod.stan.summary.bi.shared.iisplusbesag$summary, format = "markdown", digits = 3)
+
+mod.leigh.shared$summary.fixed
+ml1.hyper <- mod.leigh.shared$summary.hyperpar[, c("0.025quant", "0.5quant", "0.975quant")]
+ml1.hyper[grepl("Precision", rownames(ml1.hyper)),] <- 1/sqrt(ml1.hyper[grepl("Precision", rownames(ml1.hyper)),])[3:1]
+rownames(ml1.hyper) <- gsub("Precision", "SD", rownames(ml1.hyper))
+ml1.hyper
+
+mod.leigh.2.shared$summary.fixed
+ml2.hyper <- mod.leigh.2.shared$summary.hyperpar[, c("0.025quant", "0.5quant", "0.975quant")]
+ml2.hyper[grepl("Precision", rownames(ml2.hyper)),] <- 1/sqrt(ml2.hyper[grepl("Precision", rownames(ml2.hyper)),])[3:1]
+rownames(ml2.hyper) <- gsub("Precision", "SD", rownames(ml2.hyper))
+ml2.hyper
+
+mod.leigh.3.shared$summary.fixed
+ml3.hyper <- mod.leigh.3.shared$summary.hyperpar[, c("0.025quant", "0.5quant", "0.975quant")]
+ml3.hyper[grepl("Precision", rownames(ml3.hyper)),] <- 1/sqrt(ml3.hyper[grepl("Precision", rownames(ml3.hyper)),])[3:1]
+rownames(ml3.hyper) <- gsub("Precision", "SD", rownames(ml3.hyper))
+ml3.hyper
+
+# compare predictions
+res.median <- tibble(inla.bym2.shared.iid.spatial = mod.leigh.shared$summary.fitted.values$`0.5quant`,
+                     inla.iid.besag.shared.spatial = mod.leigh.3.shared$summary.fitted.values$`0.5quant`,
+                     stan.bym2.shared.spatial = summary(mod.stan.bi.shared, pars = "preds", probs = c(0.5))$summary[, "50%"],
+                     stan.bym2.shared.iid.spatial = summary(mod.stan.bi.shared.iisplusbesag, pars = "preds", probs = c(0.5))$summary[, "50%"])
+
+pairs.med <- ggpairs(res.median) +
+  theme_light()
+for (i in 2:pairs.med$nrow) {
+  for (j in 1:(i-1)) {
+    pairs.med[i,j] <- pairs.med[i,j] + geom_abline(intercept = 0,slope = 1, col = "darkgreen")
+  }
+}
+pairs.med
+
+res.lower <- tibble(inla.bym2.shared.iid.spatial = mod.leigh.shared$summary.fitted.values$`0.025quant`,
+                     inla.iid.besag.shared.spatial = mod.leigh.3.shared$summary.fitted.values$`0.025quant`,
+                     stan.bym2.shared.spatial = summary(mod.stan.bi.shared, pars = "preds", probs = c(0.025))$summary[, "2.5%"],
+                     stan.bym2.shared.iid.spatial = summary(mod.stan.bi.shared.iisplusbesag, pars = "preds", probs = c(0.025))$summary[, "2.5%"])
+
+pairs.lower <- ggpairs(res.lower) +
+  theme_light()
+for (i in 2:pairs.lower$nrow) {
+  for (j in 1:(i-1)) {
+    pairs.lower[i,j] <- pairs.lower[i,j] + geom_abline(intercept = 0,slope = 1, col = "darkgreen")
+  }
+}
+pairs.lower
+
+res.upper <- tibble(inla.bym2.shared.iid.spatial = mod.leigh.shared$summary.fitted.values$`0.975quant`,
+                    inla.iid.besag.shared.spatial = mod.leigh.3.shared$summary.fitted.values$`0.975quant`,
+                    stan.bym2.shared.spatial = summary(mod.stan.bi.shared, pars = "preds", probs = c(0.975))$summary[, "97.5%"],
+                    stan.bym2.shared.iid.spatial = summary(mod.stan.bi.shared.iisplusbesag, pars = "preds", probs = c(0.975))$summary[, "97.5%"])
+
+pairs.upper <- ggpairs(res.upper) +
+  theme_light()
+for (i in 2:pairs.upper$nrow) {
+  for (j in 1:(i-1)) {
+    pairs.upper[i,j] <- pairs.upper[i,j] + geom_abline(intercept = 0,slope = 1, col = "darkgreen")
+  }
+}
+pairs.upper
+
+res.width <- tibble(inla.bym2.shared.iid.spatial = mod.leigh.shared$summary.fitted.values$`0.975quant` -
+                      mod.leigh.shared$summary.fitted.values$`0.025quant`,
+                    inla.iid.besag.shared.spatial = mod.leigh.3.shared$summary.fitted.values$`0.975quant` -
+                      mod.leigh.3.shared$summary.fitted.values$`0.025quant`,
+                    stan.bym2.shared.spatial = summary(mod.stan.bi.shared, pars = "preds", probs = c(0.975))$summary[, "97.5%"] -
+                      summary(mod.stan.bi.shared, pars = "preds", probs = c(0.025))$summary[, "2.5%"],
+                    stan.bym2.shared.iid.spatial = summary(mod.stan.bi.shared.iisplusbesag, pars = "preds", probs = c(0.975))$summary[, "97.5%"] -
+                      summary(mod.stan.bi.shared.iisplusbesag, pars = "preds", probs = c(0.025))$summary[, "2.5%"])
+
+pairs.width <- ggpairs(res.width) +
+  theme_light()
+for (i in 2:pairs.width$nrow) {
+  for (j in 1:(i-1)) {
+    pairs.width[i,j] <- pairs.width[i,j] + geom_abline(intercept = 0,slope = 1, col = "darkgreen")
+  }
+}
+pairs.width

@@ -15,8 +15,8 @@ transformed parameters {
     matrix[R, 2] mu; // means of bivariate normal obs
 
     for (i in 1:R) {
-         mu[i, 1] = gamma_1[i]; //
-         mu[i, 2] = gamma_2[i]; //
+         mu[i, 1] = beta[1] + gamma_1[i]; //
+         mu[i, 2] = beta[2] + gamma_2[i]; //
     }
 }
 model {
@@ -24,10 +24,10 @@ model {
         y[i] ~ multi_normal(to_vector(mu[i,]), Sigma[i]); // bivariate normal observations
     }
 
-    sigma ~ normal(0, sigma_normal_sd);
-    gamma_1 ~ normal(beta[1], sigma[1]); // IID normal REs on region
-    gamma_2 ~ normal(beta[2], sigma[2]); // IID normal REs on region
-    beta ~ normal(0, 5);
+    sigma ~ gamma(5, 0.00005);
+    gamma_1 ~ normal(0, sigma[1]); // IID normal REs on region
+    gamma_2 ~ normal(0, sigma[2]); // IID normal REs on region
+    // beta ~ normal(0, 5);
 }
 generated quantities {
     real log_sigma[2];
@@ -38,8 +38,6 @@ generated quantities {
     
     log_sigma = log(sigma);
     preds = mu;
-    v_1 = gamma_1 - beta[1];
-    v_2 = gamma_2 - beta[2];
     
     for (r in 1:R) {
         log_lik[r] = multi_normal_lpdf(y[r] | to_vector(mu[r,]), Sigma[r]);
