@@ -53,6 +53,8 @@ run_numbers <- sort(unique(run_numbers))
 for (rn in 1:length(run_numbers)) {
     setwd(paste0(savedir,"/tmp"))
     
+    cat(paste0("Compiling run: ", run_numbers[rn], "\n")); flush.console()
+    
     run_number <- run_numbers[rn]
     
     tmp.resfiles <- grep(paste0("results_run-", run_number, "_sim-"), resfiles, value = TRUE)
