@@ -46,19 +46,101 @@ for (i in 1:length(fs)) {
 
 run_numbers <- sort(run_numbers)
 
+# which runs do we want for the paper?
+paper_dgms <- c(2, 4, 15)
+paper_models <- c(1,2)
+which_runs <- res_run %>% filter(dgm_number %in% paper_dgms & model_number %in% paper_models) %>% pull(run_number)
+shared_mods <- res_run %>% filter(dgm_number %in% paper_dgms & model_number == 2) %>% pull(run_number)
+nonshared_mods <- res_run %>% filter(dgm_number %in% paper_dgms & model_number == 1) %>% pull(run_number)
+
+model_results <- vector(mode = "list", length = length(which_runs))
+
 # read in results and display in tables
 tmps <- vector(mode = "list", length = length(run_numbers))
-for (i in 1:length(run_numbers)) {
-    run_number <- run_numbers[i]
+for (i in 1:length(which_runs)) {
+    run_number <- which_runs[i]
     myfile <- paste0("results-diags_run-",run_number,".Rdata")
-    tmps[[i]] <- vector(mode = "list", length = 2)
     load(myfile)
-    tmps[[i]][[1]] <- results_comp
-    tmps[[i]][[2]] <- diags_comp
-    rm(results_comp)
-    rm(diags_comp)
+    model_results[[i]] <- results_comp
+    
     cat(paste0("model: ", res_run$model_number[res_run$run_number == run_number], 
                "; dgm: ", res_run$dgm_number[res_run$run_number == run_number], "\n"))
-    print(kable(tmps[[i]][[1]], format = "markdown", caption = "Simulation results", digits = 3))
-    print(kable(tmps[[i]][[2]], format = "markdown", caption = "Stan diagnostics"))
+    print(kable(diags_comp, format = "markdown", caption = "Stan diagnostics"))
+    
+    rm(results_comp)
+    rm(diags_comp)
 }
+
+model_results
+
+# parameter name crosswalk
+parnames <- tibble(param = model_results[which_runs %in% shared_mods][[1]][, c("param")],
+                   parname = c("$\\beta_1$", "$\\beta_2$",
+                               "$\\sigma_1$", "$\\sigma_2$",
+                               "$\\rho_1$", "$\\rho_2$", 
+                               "$\\lambda$", "latent means"))
+
+# create big table
+tables.list <- vector(mode = "list", length = length(paper_dgms))
+
+for (j in 1:length(tables.list)) {
+    s1runs <- res_run %>% filter(dgm_number == paper_dgms[j] & model_number %in% paper_models) %>% pull(run_number)
+    tmp1 <- model_results[which_runs %in% s1runs & which_runs %in% nonshared_mods][[1]][, c("param",
+                                                                                            "mean_absolute_bias",
+                                                                                            "mean_coverage.95",
+                                                                                            "mean_width.95")]
+    tmp2 <- model_results[which_runs %in% s1runs & which_runs %in% shared_mods][[1]][, c("param",
+                                                                                         "mean_absolute_bias",
+                                                                                         "mean_coverage.95",
+                                                                                         "mean_width.95")]
+    tmp2$order <- 1:nrow(tmp2)
+    tmp2 <- merge(tmp2, parnames)
+    tmp2 <- tmp2[order(tmp2$order),]
+    
+    tmp1$order <- 1:nrow(tmp1)
+    tmp1 <- merge(tmp1, parnames)
+    tmp1 <- tmp1[order(tmp1$order),]
+    
+    tmptabmods <- rep(c("shared", "nonshared"), nrow(tmp2))
+    sctab <- c()
+    for (i in 1:nrow(tmp2)) {
+        parname <- tmp2$param[i]
+        
+        if (parname == "lambda") {
+            tt <- rbind(tmp2[tmp2$param == parname,c("parname", 
+                                                     "mean_absolute_bias",
+                                                     "mean_coverage.95",
+                                                     "mean_width.95")], 
+                        c("", rep("---", ncol(tmp1) - 1)))
+        } else {
+            tmp1$parname[tmp1$param == parname] <- ""
+            tt <- rbind(tmp2[tmp2$param == parname,c("parname", 
+                                                     "mean_absolute_bias",
+                                                     "mean_coverage.95",
+                                                     "mean_width.95")], 
+                        tmp1[tmp1$param == parname,c("parname", 
+                                                     "mean_absolute_bias",
+                                                     "mean_coverage.95",
+                                                     "mean_width.95")])
+        }
+        tmptab <- cbind(model = tmptabmods[((i-1)*2 + 1):((i-1)*2 + 2)],
+                        tt)
+        sctab <- rbind(sctab, tmptab)
+        sctab <- sctab[,c("parname", 
+                          "model", 
+                          "mean_absolute_bias",
+                          "mean_coverage.95",
+                          "mean_width.95")]
+        for (vv in c("mean_absolute_bias", "mean_coverage.95", "mean_width.95")) {
+            sctab[,vv] <- as.numeric(sctab[, vv])
+        }
+    }
+    rownames(sctab) <- NULL
+    tables.list[[j]] <- sctab
+}
+
+kable(tables.list, booktabs = TRUE, format = "markdown", caption = "Simulation results", valign = 't',
+      col.names = c("Model", "Parameter", "Mean bias", "Mean 95\\% coverage", "Mean 95\\% width"),
+      digits = 4)
+
+saveRDS(tables.list, file = "../proj-2-chapter-results/simulation-results-table.rds")

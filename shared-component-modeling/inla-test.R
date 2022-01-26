@@ -722,7 +722,7 @@ mod.stan.bi.shared.iisplusbesag <- rstan::read_stan_csv(fit$output_files())
 mod.stan.summary.bi.shared.iisplusbesag <- summary(mod.stan.bi.shared.iisplusbesag,
                                       pars = params_to_extract,
                                       probs = c(0.025, 0.5, 0.975))
-# compare results
+# compare shared results ####
 kable(mod.stan.summary.bi.shared$summary, format = "markdown", digits = 3)
 kable(mod.stan.summary.bi.shared.iisplusbesag$summary, format = "markdown", digits = 3)
 
