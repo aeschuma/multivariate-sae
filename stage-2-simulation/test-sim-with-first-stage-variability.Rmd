@@ -1,0 +1,319 @@
+---
+title: "Simulation with first stage variability"
+author: "Austin Schumacher"
+date: "`r Sys.Date()`"
+output: 
+    pdf_document:
+        extra_dependencies: ["bm", "bbm", "tensor", "pdfpages"]
+        includes:
+            in_header: "~/Desktop/work/presentation_publication_resources/mycommands.tex"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(SUMMER)
+library(tidyverse)
+library(spdep)
+library(geosphere)
+library(haven)
+library(knitr)
+library(kableExtra)
+library(magrittr)
+library(rstan)
+library(cmdstanr)
+library(svyVGAM)
+library(mvtnorm)
+library(rgdal)
+library(bayesplot)
+library(INLA)
+library(viridis)
+library(classInt)
+library(gridExtra)
+library(ggpubr)
+library(loo)
+
+dropbox_dir <- "~/Dropbox/dissertation_2/survey-csmf/results/stage-2-simulation"
+```
+
+# Overview
+
+We will perform a simulation study to explore the recovery of parameters. This simulation will include the variability from the first-stage model in order to validate the full model (rather than taking the first stage results as fixed and just validating the second stage model). Instead of simulating individual-level data and calculating first-stage direct estimates and fitting a second stage smoothing model to those, we will set known means and variances for each region and then draw area-level sample means from their sampling distribution, and additionally draw area-level sample variances their sampling distribution. The known mean parameters will be parameterized by smoothing models that we will fit in the second stage. Pseudo-direct estimates will be these area-level sample means with associated variance equal to the these sample variances. For each region, we will assess the bias of the sample means and coverage of uncertainty intervals created with the sample variances. We will then fit our second-stage smoothing models on these sample means and sample variances and assess the bias and coverage of the estimated latent means in each region.
+
+# 1-dimensional data
+
+We will start with the simplest case of one-dimensional data.
+
+## IID latent mean model
+
+Before we try simulating data with both IID and ICAR components, we will first look at the IID-only case.
+
+### Data generating mechanism
+
+Let $r = 1, \dots, R$ index region. The region-level means will be generated as
+
+\eq{
+    \mu_{r} &= \beta_1 + v_{r} \\
+    v_{r} &\overset{iid}{\sim} N(0,\sigma^2_v).
+}
+
+with $\beta_1$ set to be the estimated intercept and $\sigma^2_v$ set to be the estimated variance of the random effects from a model fit to the 2014 KDHS HAZ data. The random effects will only be simulated once and the same ones will be used across all simulations.
+
+Once we have these $\mu_{r}$ values, we will simulate the area-level sample means as
+
+\eq{
+    \hat{y}_r | \mu_r, V_r &\sim N(\mu_r, V_r)
+}
+
+where the $V_r$ are set to be equal to the asymptotic design-based variance estimate, $\hat{V}^{des}_r$, of the area-level mean HAZ from the 2014 KDHS data.
+
+Now, for an SRS, the sampling distribution of the area-level sample variances is
+
+\eq{
+    \hat{V}^{srs}_r | V_r, n_r \sim \Gamma\left(\frac{n_r - 1}{2}, \frac{n_r - 1}{2 V_r}\right) 
+}
+
+where $n_r$ is the sample size of an SRS in area $r$. The 2014 KDHS uses a stratified cluster design rather than an SRS, which has a different sampling variance than an SRS. The ratio of the variance for a statistic calculated using a specific survey design to the variance of that statistic calculated using an SRS of the same sample size is called the design effect,
+
+\eq{
+    d^2 &= \frac{\hat{V}}{\hat{V}^{srs}}.
+}
+
+In the a typical DHS, the average design effect across all indicators is $d^2 = 1.5^2 = 2.25$ (taken from this answer on the DHS user forum: https://userforum.dhsprogram.com/index.php?t=msg&goto=3448&S=Google). Thus, for our simulation we will let $n_r$ be the number of sampled children with HAZ scores in each region, and we will calculate the effective sample size that would be needed from an SRS in order to have the same sampling variance as the DHS sampling design. 
+
+Since the variance of a $\Gamma(\alpha, \beta)$ distribution is $\alpha/\beta^2$, we have
+
+\eq{
+    \Var(\hat{V}^{srs}_r) &= \frac{\left(\frac{n_r-1}{2}\right)}{\left(\frac{n_r-1}{2 V_r}\right)^2} \\
+    &= \frac{2 (V_r)^2}{(n_r - 1)}.
+}
+
+Now, we want $\hat{V}_r = 2.25 \times \hat{V}^{srs}_r = 2.25 \times \frac{2 (V_r)^2}{(n_r - 1)} = \frac{2 (V_r)^2}{\left((n_r - 1)/2.25\right)} \approx \frac{2 (V_r)^2}{\left((n_r/2.25 - 1)\right)}$, which yields an effective sample size of $n_r^* = n_r/2.25$ (as long as $n_r$ is sufficiently large). 
+
+Thus, we will simulate the area-level sample variances as
+
+\eq{
+    \hat{V}_r | V_r, n_r^* \sim \Gamma\left(\frac{(n_r^* - 1)}{2}, \frac{n_r^* - 1}{2 V_r}\right).
+}
+
+In each simulation, we will have the same values of $\mu_r$ and $V_r$, and we use these to simulate $\hat{y}_r$ and $\hat{V}_r$. We will treat the $\hat{y}_r$ as pseudo-direct estimates and calculate asymptotic 95\% confidence intervals as $\hat{y}_r \pm t_{n_r^*-1, 0.975}\sqrt{\hat{V}_r}$. We will also fit an IID smoothing model to the pseudo-direct estimates to estimate the latent means in each region with corresponding 95\% credible intervals. This smoothing model will be correctly specified to match the data generating mechanism and be fit via a Bayesian model with relatively uninformative priors.
+
+### Results
+
+```{r, fig.height=9, cache = TRUE}
+# functions ####
+fitINLA <- function(formula, data, lincombs) {
+    inla(formula, data = data, 
+         family = "gaussian",
+         lincomb = lincombs,
+         control.family = list(hyper = list(prec = list(initial = 10, fixed=T))), 
+         control.predictor = list(compute=T),
+         control.compute = list(config=T, waic = TRUE, dic = TRUE, cpo = TRUE),
+         control.inla = list(lincomb.derived.correlation.matrix=T),
+         control.fixed = list(prec = list(default = 0.001), correlation.matrix=T))
+}
+
+# load raw data
+load(paste0(dropbox_dir, "/../../data/ken_dhs2014/data/haz-waz-kenDHS2014.rda"))
+n_regions <- length(unique(dat$admin1))
+
+# extract values from data
+n_r <- table(dat$admin1)
+d <- 1.5
+n_r_star <- n_r/(d^2)
+# load direct estimates
+direct_estimates <- read_rds(paste0(dropbox_dir,"/../ken2014-hazwaz/ken2014-hazwaz-stage-1.rds"))
+V_r <- direct_estimates[["V.array"]][,1,1]
+
+# load 2014 KDHS HAZ/WAZ modeling results
+inla_results <- readRDS(paste0(dropbox_dir, "/../ken2014-hazwaz/ken2014-hazwaz-stage-2-inla-all.rds"))
+
+# extract parameters from model for sim
+beta_1 <- inla_results[["Univariate IID"]]$summary.fixed$`0.5quant`[1]
+sigma <- (inla_results[["Univariate IID"]]$summary.hyperpar$`0.5quant`[1])^{-1/2}
+
+# simulate a single set of random effects
+set.seed(8008135)
+v_r <- rnorm(n_regions, 0, sigma)
+
+# calculate latent means
+mu_r <- beta_1 + v_r
+
+# what measures do we want to calculate
+measures <- c("mean bias",
+              "mean absolute bias",
+              "mean relative bias",
+              "80% coverage",
+              "95% coverage",
+              "80% width",
+              "95% width")
+
+# start simulations
+set.seed(80085)
+n_sim <- 500
+sim_results <- list(direct_estimates = NA,
+                    univariate_iid = NA)
+for (i in 1:length(sim_results)) {
+    sim_results[[i]] <- array(NA, dim = c(length(measures), n_sim, n_regions))
+    # sim_results[[i]] <- tibble(bias = rep(NA, n_sim),
+    #                           abs_bias = rep(NA, n_sim),
+    #                           rel_abs_bias = rep(NA, n_sim),
+    #                           coverage_80 = rep(NA, n_sim),
+    #                           width_80 = rep(NA, n_sim),
+    #                           coverage_95 = rep(NA, n_sim),
+    #                           width_95 = rep(NA, n_sim))
+}
+
+for(s in 1:n_sim) {
+    # simulate direct estimates
+    y_hat_r <- rnorm(n_regions, mu_r, sqrt(V_r))
+    
+    # simulate V_des
+    V_hat_r <- rgamma(n_regions, (n_r_star - 1)/2, rate = (n_r_star - 1)/(2*V_r))
+    
+    # calculate bias results for direct estimates
+    sim_results$direct_estimates[1, s, ] <- y_hat_r - mu_r
+    sim_results$direct_estimates[2, s, ] <- abs(y_hat_r - mu_r)
+    sim_results$direct_estimates[3, s, ] <- abs(y_hat_r - mu_r)/abs(mu_r)
+    
+    # calculate CIs
+    ci_80_direct <- t(rbind(y_hat_r, y_hat_r) + t(t(c(-1, 1))) %*% t(qt(0.9, n_r_star-1)*sqrt(V_hat_r)))
+    ci_95_direct <- t(rbind(y_hat_r, y_hat_r) + t(t(c(-1, 1))) %*% t(qt(0.975, n_r_star-1)*sqrt(V_hat_r)))
+    
+    # calculate coverage and width results
+    sim_results$direct_estimates[4, s, ] <- (mu_r >= ci_80_direct[,1]) & (mu_r <= ci_80_direct[,2])
+    sim_results$direct_estimates[5, s, ] <- (mu_r >= ci_95_direct[,1]) & (mu_r <= ci_95_direct[,2])
+    sim_results$direct_estimates[6, s, ] <- (ci_80_direct[,2] - ci_80_direct[,1])
+    sim_results$direct_estimates[7, s, ] <- (ci_95_direct[,2] - ci_95_direct[,1])
+    
+    # prep for inla model
+    data <- list(y = y_hat_r,
+                 admin1 = 1:n_regions)
+    formula <- as.formula("y ~ 1 + f(admin1, model = 'iid')")
+    scaling <- 1/V_hat_r
+
+    # fit smoothing models
+    mod1 <- inla(formula,
+                 family = "gaussian",
+                 data = data,
+                 control.family = list(hyper = list(prec = list(initial = log(1), fixed=T))),
+                 control.predictor = list(compute=T),
+                 control.compute = list(config=T, waic = TRUE, dic = TRUE, cpo = TRUE),
+                 control.inla = list(lincomb.derived.correlation.matrix=T),
+                 scale = scaling,
+                 quantiles = c(0.025, 0.1, 0.5, 0.9, 0.975))
+    fitted_res <- mod1$summary.fitted.values
+    latent_means <- fitted_res$`0.5quant`
+
+    # calculate bias results for direct estimates
+    sim_results$univariate_iid[1, s, ] <- latent_means - mu_r
+    sim_results$univariate_iid[2, s, ] <- abs(latent_means - mu_r)
+    sim_results$univariate_iid[3, s, ] <- abs(latent_means - mu_r)/abs(mu_r)
+
+    # calculate coverage and width results
+    sim_results$univariate_iid[4, s, ] <- (mu_r >= fitted_res$`0.1quant`) & (mu_r <= fitted_res$`0.9quant`)
+    sim_results$univariate_iid[5, s, ] <- (mu_r >= fitted_res$`0.025quant`) & (mu_r <= fitted_res$`0.975quant`)
+    sim_results$univariate_iid[6, s, ] <- (fitted_res$`0.9quant` - fitted_res$`0.1quant`)
+    sim_results$univariate_iid[7, s, ] <- (fitted_res$`0.975quant` - fitted_res$`0.025quant`)
+}
+
+# compile results
+sim_results_region <- lapply(sim_results, function(x) {t(apply(x, c(1,3), mean))})
+sim_results_compiled <- lapply(sim_results_region, function(x) {apply(x, 2, mean)})
+
+# plot region-level results
+par(mfrow = c(ceiling(length(measures)/2), 2))
+for (i in 1:length(measures)) {
+    plot(sim_results_region$univariate_iid[, i] ~ sim_results_region$direct_estimates[, i],
+         pch = 19, col = rgb(0, 0, 0, alpha = 0.5), xlab = "direct estimates", ylab = "IID models",
+         main = measures[i])
+    abline(0, 1, col = "darkgreen")
+}
+
+```
+
+```{r}
+sim_results_table <- tibble(measure = measures,
+                            direct_estimates = sim_results_compiled$direct_estimates,
+                            univariate_iid = sim_results_compiled$univariate_iid)
+kable(sim_results_table, format = 'markdown', col.names = c("measure", "Direct", "IID model"), digits = 4,
+      caption = paste0("Simulation results for ", n_sim, " simulations, univariate DGM"))
+```
+<!-- ## IID + ICAR latent mean model -->
+
+<!-- ### Data generating mechanism -->
+
+<!-- Let $r = 1, \dots, R$ index region. The region-level means will be generated as -->
+
+<!-- \eq{ -->
+<!--     \mu_{r} &= \beta_1 + v_{r} + u_{r} -->
+<!-- } -->
+
+<!-- with $\beta_1$ set to the values estimated from a model fit to the 2014 KDHS HAZ data. For the random effects $v_{r}$ and $u_{r}$, we will first generate $v_{r}^* \overset{iid}{\sim} N(0,1)$, an unstructured random effect with fixed standard deviation 1, and $\bm{u}^*$ simulated from an ICAR using algorithm 3.1 in Rue and Held (2005). We also want the marginal variance of these ICAR random effects to be on the same scale as the IID random effects, so we must calculate a multiplicative factor $q$ that scales the random effects such that the geometric mean of the marginal variances equals 1. This scaling factor is calculated using the inverse precision of the ICAR model which is calculated from the adjacency matrix, as in Riebler et al (2016). -->
+
+<!-- Then, we calculate -->
+
+<!-- \eq{ -->
+<!--     v_{r} + u_{r} &= \sigma(\sqrt{1 - \rho}v_{r}^* + (\sqrt{\rho / q}) u_{r}^*) -->
+<!-- } -->
+
+<!-- with parameters $\sigma$, the total standard deviation of the random effects, and $\rho$, the percent of the random effects that are spatial set to be the values estimated from a model fit to the 2014 KDHS HAZ data. -->
+
+<!-- These random effects will only be simulated once and the same ones will be used across all simulations. -->
+
+<!-- Once we have these $\mu_{r}$ values, we will simulate the area-level sample means as -->
+
+<!-- \eq{ -->
+<!--     \hat{y}_r | \mu_r, V_r &\sim N(\mu_r, V_r) -->
+<!-- } -->
+
+<!-- where the $V_r$ are set to be equal to the asymptotic design-based variance estimate, $\hat{V}^{des}_r$, of the area-level mean HAZ from the 2014 KDHS data. -->
+
+<!-- Now, for an SRS, the sampling distribution of the area-level sample variances is -->
+
+<!-- \eq{ -->
+<!--     \hat{V}^{srs}_r | V_r, n_r \sim \Gamma(\frac{n_r - 1}{2}, \frac{n_r - 1}{2 V_r})  -->
+<!-- } -->
+
+<!-- where $n_r$ is the sample size of an SRS in area $r$. The 2014 KDHS uses a stratified cluster design rather than an SRS, which has a different sampling variance than an SRS. The ratio of the variance for a statistic calculated using a specific survey design to the variance of that statistic calculated using an SRS of the same sample size is called the design effect, -->
+
+<!-- \eq{ -->
+<!--     d^2 &= \frac{\hat{V}}{\hat{V}^srs}. -->
+<!-- } -->
+
+<!-- In the a typical DHS, the average design effect across all indicators is $d^2 = 1.5^2 = 2.25$ (https://userforum.dhsprogram.com/index.php?t=msg&goto=3448&S=Google). Thus, in our simulation we will set $n_r$ to be the sample size of children with HAZ scores in each region and adjust the variance of the sample variance accordingly. Since the variance of a $\Gamma(\alpha, \beta)$ distribution is $\alpha/\beta^2$, we have $\Var(\hat{V}_r) = \frac{\left(\frac{n_r-1}{2}\right)}{\left(\frac{n_r-1}{2 V_r}\right)^2} = \frac{2 (V_r)^2}{(n_r - 1)}$. Now, we want $\hat{V}_r = 2.25 \hat{V}^{srs}_r = 2.25 \frac{2 (V_r)^2}{(n_r - 1)} = \frac{2 (V_r)^2}{\left((n_r - 1)/2.25\right)} \approx \frac{2 (V_r)^2}{\left((n_r/2.25 - 1)\right)}$, which yields an effective sample size of $n_r/2$. Thus, we will simulate the area-level sample variances as -->
+
+<!-- \eq{ -->
+<!--     \hat{V}_r | V_r, n_r \sim \Gamma(\frac{(n_r/2.25 - 1)}{2}, \frac{n_r/2.25 - 1}{2 V_r}). -->
+<!-- } -->
+
+<!-- In each simulation, we will have the same values of $\mu_r$ and $V_r$ and we will simulate the $\hat{y}_r$ and $\hat{V}_r$. We will treat the $\hat{y}_r$ as pseudo-direct estimates and calculate 95\% confidence intervals as $\hat{y}_r \pm t_{n_r/2.25, 0.975}\sqrt{\hat{V}_r}$. We will also fit a suite of second stage smoothing models to the pseudo-direct estimates to estimate the latent means in each region with corresponding 95\% credible intervals. These models are: -->
+
+<!-- 1. IID only -->
+<!-- 2. IID + ICAR (i.e. the true data generating mechanism) -->
+
+<!-- # 2-dimensional data -->
+
+<!-- We will now move on to the bivariate case. -->
+
+<!-- # Data generating mechanism -->
+
+<!-- Let $c = 1, 2$ index the outcomes. The region-level means will be generated from fixed and random effects as -->
+
+<!-- \eq{ -->
+<!--     \mu_{r1} &= \beta_1 + v_{r1} + u_{r1} + \lambda (v_{r2} + u_{r2}) \\ -->
+<!--     \mu_{r2} &= \beta_2 + v_{r2} + u_{r2} -->
+<!-- } -->
+
+<!-- with $\beta_1$ and $\beta_2$ set to the values estimated from our shared component model fit to the 2014 KDHS HAZ/WAZ data. For the random effects $v_{rc}$ and $u_{rc}$, we will first generate $v_{rc}^* \overset{iid}{\sim} N(0,1)$, an unstructured random effect with fixed standard deviation 1, and $\bm{u}_{c}^*$ simulated from an ICAR using algorithm 3.1 in Rue and Held (2005) and scaled so $\mbox{Var}(u_{rc}^*) \approx 1$, which is done by scaling the model so the geometric mean of these variances is 1, using the adjacency matrix to calculate the inverse precision of the ICAR model as in Riebler et al (2016). -->
+
+<!-- Then, we calculate -->
+
+<!-- \eq{ -->
+<!--     v_{rc} + u_{rc} = \sigma_c(\sqrt{1 - \rho_c}v_{rc}^* + \sqrt{\rho_c}u_{rc}^*) -->
+<!-- } -->
+
+<!-- with parameters $\sigma_c$ and $\rho_c$ set to be the values estimated from our shared component model fit to the 2014 KDHS HAZ/WAZ data. -->
+
+<!-- These random effects will only be simulated once and the same ones will be used across all simulations -->
+
+<!-- Once we have these $\mu_{rc}$ values, we will simulate the  -->

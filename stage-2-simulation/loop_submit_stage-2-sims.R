@@ -28,7 +28,7 @@ if (root == "P:/") {
 
 ## testing?
 testing_loop <- FALSE
-testing_script <- FALSE
+testing_script <- TRUE
 
 ## define directories
 
@@ -44,80 +44,48 @@ setwd(wd)
 ## SIMULATION SETTINGS
 #######################
 
-## which model and dgm to run?
-# see model-info.csv
-model_to_run <- c(1, 2)
-# model_to_run <- 3:4
+## which dgm to run?
 # dgm_to_run <- c(1, 2)
-dgm_to_run <- c(3, 8, 15, 16)
-
-## STAN options
-niter <- 10000
-nchains <- 2
-prop_warmup <- 0.5
-max_treedepth <- 25
-adapt_delta <- 0.8
+dgm_to_run <- c(6)
 
 ## Simulation number
-number_of_sims <- 500
+number_of_sims <- 2
 
 ## loop and submit jobs
 running_total <- 0
-for (a in model_to_run) {
-    for (b in dgm_to_run) {
-        for (c in  niter) {
-            for (d in  nchains) {
-                for (e in  prop_warmup) {
-                    for (f in  max_treedepth) {
-                        for (g in  adapt_delta) {
-                            
-                            ## set run number from run info CSV
-                            run_info <- suppressWarnings(read.csv("results-run-info.csv"))
-                            run_number <- max(run_info$run_number) + 1
-                            
-                            # save run info
-                            if (!testing_loop & !testing_script) {
-                                new_info <- c(run_number, a,
-                                              b, c, d,
-                                              e, f, g,
-                                              number_of_sims)
-                                run_info <- rbind(run_info, new_info)
-                                write.csv(run_info, "results-run-info.csv", row.names = FALSE)
-                            }
-                            
-                            for (s in  1:number_of_sims) {
-                                running_total <- running_total + 1
-                                if (testing_script) {
-                                    script <- "qsub-stage-2-sims-TEST.sh"
-                                } else {
-                                    script <- "qsub-stage-2-sims.sh" 
-                                }
-                                sub <- paste0("qsub -l h=\"biostat-b34|biostat-b35|biostat-b36|biostat-b37\" -pe local ", d, " -v ",
-                                              "a=",a,
-                                              ",b=",b,
-                                              ",c=",c,
-                                              ",d=",d,
-                                              ",e=",e,
-                                              ",f=",f,
-                                              ",g=",g,
-                                              ",rr=",run_number,
-                                              ",s=",s,
-                                              ",t=",running_total,
-                                              " -N s2sim_",running_total,
-                                              " ",
-                                              script)
-                                
-                                if (testing_loop) {
-                                    print(sub)
-                                } else {
-                                    system(sub)
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+for (a in dgm_to_run) {
+                        
+    ## set run number from run info CSV
+    run_info <- suppressWarnings(read.csv("results-run-info.csv"))
+    run_number <- max(run_info$run_number) + 1
+    
+    # save run info
+    if (!testing_loop & !testing_script) {
+        new_info <- c(run_number, a, number_of_sims)
+        run_info <- rbind(run_info, new_info)
+        write.csv(run_info, "results-run-info.csv", row.names = FALSE)
+    }
+    
+    for (s in  1:number_of_sims) {
+        running_total <- running_total + 1
+        if (testing_script) {
+            script <- "qsub-stage-2-sims-TEST.sh"
+        } else {
+            script <- "qsub-stage-2-sims.sh" 
+        }
+        sub <- paste0("qsub -v ",
+                      "a=",a,
+                      ",rr=",run_number,
+                      ",s=",s,
+                      ",t=",running_total,
+                      " -N s2sim_",running_total,
+                      " ",
+                      script)
+        
+        if (testing_loop) {
+            print(sub)
+        } else {
+            system(sub)
         }
     }
 }
-

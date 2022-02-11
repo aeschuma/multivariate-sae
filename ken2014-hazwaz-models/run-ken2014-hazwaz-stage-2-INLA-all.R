@@ -33,7 +33,7 @@ fitINLA <- function(formula, data, lincombs) {
          lincomb = lincombs,
          control.family = list(hyper = list(prec = list(initial = 10, fixed=T))), 
          control.predictor = list(compute=T),
-         control.compute = list(config=T),
+         control.compute = list(config=T, waic = TRUE, dic = TRUE, cpo = TRUE),
          control.inla = list(lincomb.derived.correlation.matrix=T),
          control.fixed = list(prec = list(default = 0.001), correlation.matrix=T))
 }
@@ -272,3 +272,21 @@ mod.bivariate.shared.bym <- fitINLA(formula = formula.bivariate.shared.bym,
 mod.bivariate.shared.bym.alt <- fitINLA(formula = formula.bivariate.shared.bym.alt, 
                                         data = data, 
                                         lincombs = c(lc.all.haz.shared.alt, lc.all.waz.alt))
+
+inla.results <- list(mod.univariate.iid,
+                     mod.univariate.bym,
+                     mod.bivariate.nonshared.iid,
+                     mod.bivariate.nonshared.bym,
+                     mod.bivariate.shared.iid,
+                     mod.bivariate.shared.bym,
+                     mod.bivariate.shared.bym.alt)
+names(inla.results) <- c("Univariate IID",
+                         "Univariate BYM",
+                         "Bivariate nonshared IID", 
+                         "Bivariate nonshared BYM",
+                         "Bivariate shared IID", 
+                         "Bivariate shared BYM",
+                         "Bivariate shared Besag + IID")
+
+# Save Results ####
+write_rds(inla.results, file = "../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-hazwaz-stage-2-inla-all.rds")
