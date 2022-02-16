@@ -19,6 +19,7 @@ library(classInt)
 library(gridExtra)
 library(ggpubr)
 library(loo)
+library(surveillance)
 
 savedir <- "~/Dropbox/dissertation_2/survey-csmf/results/proj-2-chapter-results"
 
@@ -92,11 +93,6 @@ nat_res$meanWAZuni.unweighted <- means.svymean.un[["WAZ"]]
 
 V.tmp <- vcov(means.svymean)
 V.tmp.flip <- vcov(means.svymean.flip)
-V.list[[admin1.tmp]] <- V.tmp
-V.array[i, , ] <- V.tmp
-
-V.array.flip[i, , ] <- V.tmp.flip
-V.list.flip[[admin1.tmp]] <- V.tmp.flip
 
 nat_res$seHAZ.bi <- V.tmp[1, 1]^0.5
 nat_res$seWAZ.bi <- V.tmp[2, 2]^0.5
@@ -156,45 +152,53 @@ for(i in 1:n_regions) {
 
 # make plots of univariate estimates for data section
 
-# plotting maps function
-plot_maps <- function(poly, outcome.df, 
-                      names.reg.poly, names.reg.outcomes, 
-                      outcomes, outcomes.names, 
-                      plot.palette) {
-    tmp <- merge(poly, outcome.df[, c(names.reg.outcomes, outcomes)], 
-                 by.x = names.reg.poly, by.y = names.reg.outcomes)
-    plot.grid <- vector(mode = "list", length = length(outcomes))
-    for(i in 1:length(outcomes.names)) {
-        plot.grid[[i]] <- spplot(tmp, outcomes[i], 
-                                 col.regions = plot.palette, cuts = length(plot.palette) - 1,
-                                 main = outcomes.names[i])
-    }
-    do.call(grid.arrange, plot.grid)
-}
-
 # polygon plots
 n_cats <- 15
 plot.palette <- viridis(n_cats)
 outcomes.names <- c("Mean HAZ unweighted", "Mean WAZ unweighted", "Mean HAZ weighted", "Mean WAZ weighted")
 outcomes <- c("meanHAZuni.unweighted", "meanWAZuni.unweighted", "meanHAZuni.weighted", "meanWAZuni.weighted")
+mean_range <- range(c(results$meanHAZuni.weighted, results$meanHAZuni.unweighted, results$meanWAZuni.weighted, results$meanWAZuni.unweighted))
 
 setwd(savedir)
 pdf("weighted-unweighted-uni-mean-compare.pdf", width = 9, height = 9)
-plot_maps(poly = poly.adm1, outcome.df = results, 
-          names.reg.poly = "NAME_1", names.reg.outcomes = "admin1.name",
-          outcomes = outcomes, outcomes.names = outcomes.names, 
-          plot.palette = plot.palette)
+tmp <- merge(poly.adm1, results[, c("admin1.name", outcomes)], 
+             by.x = "NAME_1", by.y = "admin1.name")
+spplot(tmp, outcomes, 
+       col.regions = plot.palette, cuts = length(plot.palette) - 1,
+       layout = c(2, 2),
+       names.attr = outcomes.names)
 dev.off()
 
 n_cats <- 15
 plot.palette <- viridis(n_cats)
 outcomes.names <- c("SE HAZ unweighted", "SE WAZ unweighted", "SE HAZ weighted", "SE WAZ weighted")
 outcomes <- c("seHAZuni.unweighted", "seWAZuni.unweighted", "seHAZuni.weighted", "seWAZuni.weighted")
+se_range <- range(c(results$seHAZuni.weighted, results$seHAZuni.unweighted, results$senWAZuni.weighted, results$seWAZuni.unweighted))
 
 setwd(savedir)
 pdf("weighted-unweighted-uni-se-compare.pdf", width = 9, height = 9)
-plot_maps(poly = poly.adm1, outcome.df = results, 
-          names.reg.poly = "NAME_1", names.reg.outcomes = "admin1.name",
-          outcomes = outcomes, outcomes.names = outcomes.names, 
-          plot.palette = plot.palette)
+tmp <- merge(poly.adm1, results[, c("admin1.name", outcomes)], 
+             by.x = "NAME_1", by.y = "admin1.name")
+spplot(tmp, outcomes, 
+       col.regions = plot.palette, cuts = length(plot.palette) - 1,
+       layout = c(2, 2),
+       names.attr = outcomes.names)
 dev.off()
+
+# scatter plot with uncertainty
+results$lowerHAZuni.weighted <- results$meanHAZuni.weighted - results$seHAZuni.weighted
+results$upperHAZuni.weighted <- results$meanHAZuni.weighted + results$seHAZuni.weighted
+results$lowerWAZuni.weighted <- results$meanWAZuni.weighted - results$seWAZuni.weighted
+results$upperWAZuni.weighted <- results$meanWAZuni.weighted + results$seWAZuni.weighted
+
+ggplot(results, aes(x = meanWAZuni.weighted, y = meanHAZuni.weighted,
+                    ymin = lowerHAZuni.weighted, ymax = upperHAZuni.weighted,
+                    xmin = lowerWAZuni.weighted, xmax = upperWAZuni.weighted)) +
+    geom_point(cex = 1.5) +
+    geom_errorbar() +
+    geom_errorbarh() +
+    geom_smooth(method = "lm") +
+    ylab("HAZ") +
+    xlab("WAZ") +
+    theme_light()
+ggsave("haz-waz-weighted-scatter.pdf", width = 6, height = 6)

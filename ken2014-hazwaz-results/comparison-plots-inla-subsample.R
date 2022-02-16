@@ -159,13 +159,16 @@ twoway_comp_plot <- function(data, measure) {
 ## raw data 
 load("../../../Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/haz-waz-kenDHS2014.rda")
 
+# set sample size for subsample
+samplesize <- 0.05
+
 ## direct estimates (stage 1)
-stage_1_list <- read_rds("../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-hazwaz-stage-1.rds")
+stage_1_list <- read_rds(paste0("../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-subsample-",gsub("\\.","_",samplesize),"-hazwaz-stage-1.rds"))
 results_direct <- stage_1_list$results
 n_regions <- nrow(results_direct)
 
 ## stage 2 estimates (from inla)
-stage_2_list <- read_rds("../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-hazwaz-stage-2-inla-all.rds")
+stage_2_list <- read_rds(paste0("../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-subsample-",gsub("\\.","_",samplesize),"-hazwaz-stage-2-inla-all.rds"))
 stage_2_list[[7]] <- NULL
 n_stage_2_models <- length(stage_2_list)
 
@@ -230,9 +233,6 @@ for (i in 1:length(stage_2_list)) {
     allests <- allests %>% bind_rows(res.tmp)
 }
 
-# start making plots ####
-setwd(savedir)
-
 # WAIC, DIC, CPO ####
 
 modcomp <- tibble(model = names(stage_2_list),
@@ -260,15 +260,15 @@ for (i in 1:length(comps)) {
 }
 
 ## save table
-write_rds(modcomp, "waic-dic-cpo-table.rds")
+write_rds(modcomp, paste0(savedir,"/waic-dic-cpo-subsample-table.rds"))
 
 kable(modcomp, col.names = c("Model","WAIC", "DIC", "CPO"),
       format = "markdown", escape = FALSE)
 
 # results storage for posterior SDs
 model_name <- c("Direct", "Univariate IID", "Univariate BYM",  
-           "Bivariate nonshared IID", "Bivariate shared IID",
-           "Bivariate nonshared BYM", "Bivariate shared BYM")
+                "Bivariate nonshared IID", "Bivariate shared IID",
+                "Bivariate nonshared BYM", "Bivariate shared BYM")
 outcome <- c("haz", "waz")
 reg <- 1:47
 posterior_sd_res <- expand_grid(model_name, outcome, reg)
@@ -280,81 +280,81 @@ posterior_sd_res$sd[posterior_sd_res$model_name == "Direct" & posterior_sd_res$o
 
 # save posterior SDs of area-level estimates
 for (i in 1:length(stage_2_list)) {
-  mod.preds <- stage_2_list[[i]]$summary.lincomb.derived
-  haz.pred <- mod.preds[grepl("haz", rownames(mod.preds)),]
-  waz.pred <- mod.preds[grepl("waz", rownames(mod.preds)),]
-  posterior_sd_res$sd[posterior_sd_res$model_name == names(stage_2_list)[i] & posterior_sd_res$outcome == "haz"] <- haz.pred$sd
-  posterior_sd_res$sd[posterior_sd_res$model_name == names(stage_2_list)[i] & posterior_sd_res$outcome == "waz"] <- waz.pred$sd
+    mod.preds <- stage_2_list[[i]]$summary.lincomb.derived
+    haz.pred <- mod.preds[grepl("haz", rownames(mod.preds)),]
+    waz.pred <- mod.preds[grepl("waz", rownames(mod.preds)),]
+    posterior_sd_res$sd[posterior_sd_res$model_name == names(stage_2_list)[i] & posterior_sd_res$outcome == "haz"] <- haz.pred$sd
+    posterior_sd_res$sd[posterior_sd_res$model_name == names(stage_2_list)[i] & posterior_sd_res$outcome == "waz"] <- waz.pred$sd
 }
 
 # formatting all results ####
 {
-# par.names <- c("$\\beta_1$",
-#                "$\\beta_2$",
-#                "$\\sigma_1$",
-#                "$\\sigma_2$",
-#                "$\\rho_1$",
-#                "$\\rho_2$",
-#                "$\\lambda$")
-# uni.par.ests.b11 <- as_tibble(rbind(mod.stan.summary.haz.uni.b11$summary["beta",],
-#                                     mod.stan.summary.waz.uni.b11$summary["beta",],
-#                                     mod.stan.summary.haz.uni.b11$summary["sigma",],
-#                                     mod.stan.summary.waz.uni.b11$summary["sigma",],
-#                                     mod.stan.summary.haz.uni.b11$summary["rho",],
-#                                     mod.stan.summary.waz.uni.b11$summary["rho",],
-#                                     rep(NA, ncol(mod.stan.summary.haz.uni.b11$summary))))
-# uni.par.ests.b11$parameter <- par.names
-# uni.par.ests.b11$model_name <- "univariate bym2"
-# uni.par.ests.b11$model <- "univariate.bym2"
-# 
-# uni.par.ests.iid <- as_tibble(rbind(mod.stan.summary.haz.uni.iid$summary["beta",],
-#                                     mod.stan.summary.waz.uni.iid$summary["beta",],
-#                                     mod.stan.summary.haz.uni.iid$summary["sigma",],
-#                                     mod.stan.summary.waz.uni.iid$summary["sigma",],
-#                                     rep(NA, ncol(mod.stan.summary.haz.uni.iid$summary)),
-#                                     rep(NA, ncol(mod.stan.summary.haz.uni.iid$summary)),
-#                                     rep(NA, ncol(mod.stan.summary.haz.uni.iid$summary))))
-# uni.par.ests.iid$parameter <- par.names
-# uni.par.ests.iid$model_name <- "univariate iid"
-# uni.par.ests.iid$model <- "univariate.iid"
-# 
-# nonshared.par.ests.b11 <- as_tibble(
-#     rbind(mod.stan.summary.bi.nonshared.b11$summary[!grepl("preds", rownames(mod.stan.summary.bi.nonshared.b11$summary)),],
-#           rep(NA, ncol(mod.stan.summary.bi.nonshared.b11$summary)))
-# )
-# nonshared.par.ests.b11$parameter <- par.names
-# nonshared.par.ests.b11$model_name <- "bivariate nonshared bym2"
-# nonshared.par.ests.b11$model <- "bivariate.nonshared.bym2"
-# 
-# nonshared.par.ests.iid <- as_tibble(
-#     rbind(mod.stan.summary.bi.nonshared.iid$summary[!grepl("preds", rownames(mod.stan.summary.bi.nonshared.iid$summary)),],
-#           rep(NA, ncol(mod.stan.summary.bi.nonshared.iid$summary)),
-#           rep(NA, ncol(mod.stan.summary.bi.nonshared.iid$summary)),
-#           rep(NA, ncol(mod.stan.summary.bi.nonshared.iid$summary)))
-# )
-# nonshared.par.ests.iid$parameter <- par.names
-# nonshared.par.ests.iid$model_name <- "bivariate nonshared iid"
-# nonshared.par.ests.iid$model <- "bivariate.nonshared.iid"
-# 
-# shared.par.ests.b11 <- as_tibble(mod.stan.summary.bi.shared.b11$summary[!grepl("preds", rownames(mod.stan.summary.bi.shared.b11$summary)),])
-# shared.par.ests.b11$parameter <- par.names
-# shared.par.ests.b11$model_name <- "bivariate shared"
-# shared.par.ests.b11$model <- "bivariate.shared"
-# 
-# shared.par.ests.iid <- as_tibble(rbind(mod.stan.summary.bi.shared.iid$summary[!grepl("preds", rownames(mod.stan.summary.bi.shared.iid$summary)),],
-#                                        rep(NA, ncol(mod.stan.summary.bi.shared.iid$summary)),
-#                                        rep(NA, ncol(mod.stan.summary.bi.shared.iid$summary))))
-# shared.par.ests.iid$parameter <- par.names
-# shared.par.ests.iid$model_name <- "bivariate shared iid"
-# shared.par.ests.iid$model <- "bivariate.shared.iid"
-# 
-# all.par.ests <- bind_rows(uni.par.ests.b11,
-#                           uni.par.ests.iid,
-#                           nonshared.par.ests.b11,
-#                           nonshared.par.ests.iid,
-#                           shared.par.ests.b11,
-#                           shared.par.ests.iid) %>%
-#     relocate(c(model, parameter))
+    # par.names <- c("$\\beta_1$",
+    #                "$\\beta_2$",
+    #                "$\\sigma_1$",
+    #                "$\\sigma_2$",
+    #                "$\\rho_1$",
+    #                "$\\rho_2$",
+    #                "$\\lambda$")
+    # uni.par.ests.b11 <- as_tibble(rbind(mod.stan.summary.haz.uni.b11$summary["beta",],
+    #                                     mod.stan.summary.waz.uni.b11$summary["beta",],
+    #                                     mod.stan.summary.haz.uni.b11$summary["sigma",],
+    #                                     mod.stan.summary.waz.uni.b11$summary["sigma",],
+    #                                     mod.stan.summary.haz.uni.b11$summary["rho",],
+    #                                     mod.stan.summary.waz.uni.b11$summary["rho",],
+    #                                     rep(NA, ncol(mod.stan.summary.haz.uni.b11$summary))))
+    # uni.par.ests.b11$parameter <- par.names
+    # uni.par.ests.b11$model_name <- "univariate bym2"
+    # uni.par.ests.b11$model <- "univariate.bym2"
+    # 
+    # uni.par.ests.iid <- as_tibble(rbind(mod.stan.summary.haz.uni.iid$summary["beta",],
+    #                                     mod.stan.summary.waz.uni.iid$summary["beta",],
+    #                                     mod.stan.summary.haz.uni.iid$summary["sigma",],
+    #                                     mod.stan.summary.waz.uni.iid$summary["sigma",],
+    #                                     rep(NA, ncol(mod.stan.summary.haz.uni.iid$summary)),
+    #                                     rep(NA, ncol(mod.stan.summary.haz.uni.iid$summary)),
+    #                                     rep(NA, ncol(mod.stan.summary.haz.uni.iid$summary))))
+    # uni.par.ests.iid$parameter <- par.names
+    # uni.par.ests.iid$model_name <- "univariate iid"
+    # uni.par.ests.iid$model <- "univariate.iid"
+    # 
+    # nonshared.par.ests.b11 <- as_tibble(
+    #     rbind(mod.stan.summary.bi.nonshared.b11$summary[!grepl("preds", rownames(mod.stan.summary.bi.nonshared.b11$summary)),],
+    #           rep(NA, ncol(mod.stan.summary.bi.nonshared.b11$summary)))
+    # )
+    # nonshared.par.ests.b11$parameter <- par.names
+    # nonshared.par.ests.b11$model_name <- "bivariate nonshared bym2"
+    # nonshared.par.ests.b11$model <- "bivariate.nonshared.bym2"
+    # 
+    # nonshared.par.ests.iid <- as_tibble(
+    #     rbind(mod.stan.summary.bi.nonshared.iid$summary[!grepl("preds", rownames(mod.stan.summary.bi.nonshared.iid$summary)),],
+    #           rep(NA, ncol(mod.stan.summary.bi.nonshared.iid$summary)),
+    #           rep(NA, ncol(mod.stan.summary.bi.nonshared.iid$summary)),
+    #           rep(NA, ncol(mod.stan.summary.bi.nonshared.iid$summary)))
+    # )
+    # nonshared.par.ests.iid$parameter <- par.names
+    # nonshared.par.ests.iid$model_name <- "bivariate nonshared iid"
+    # nonshared.par.ests.iid$model <- "bivariate.nonshared.iid"
+    # 
+    # shared.par.ests.b11 <- as_tibble(mod.stan.summary.bi.shared.b11$summary[!grepl("preds", rownames(mod.stan.summary.bi.shared.b11$summary)),])
+    # shared.par.ests.b11$parameter <- par.names
+    # shared.par.ests.b11$model_name <- "bivariate shared"
+    # shared.par.ests.b11$model <- "bivariate.shared"
+    # 
+    # shared.par.ests.iid <- as_tibble(rbind(mod.stan.summary.bi.shared.iid$summary[!grepl("preds", rownames(mod.stan.summary.bi.shared.iid$summary)),],
+    #                                        rep(NA, ncol(mod.stan.summary.bi.shared.iid$summary)),
+    #                                        rep(NA, ncol(mod.stan.summary.bi.shared.iid$summary))))
+    # shared.par.ests.iid$parameter <- par.names
+    # shared.par.ests.iid$model_name <- "bivariate shared iid"
+    # shared.par.ests.iid$model <- "bivariate.shared.iid"
+    # 
+    # all.par.ests <- bind_rows(uni.par.ests.b11,
+    #                           uni.par.ests.iid,
+    #                           nonshared.par.ests.b11,
+    #                           nonshared.par.ests.iid,
+    #                           shared.par.ests.b11,
+    #                           shared.par.ests.iid) %>%
+    #     relocate(c(model, parameter))
 }
 all.results <- allests %>%
     pivot_longer(col = !c(model.name, admin1, admin1.name),
@@ -375,7 +375,7 @@ ggplot(posterior_sd_res %>% filter(outcome == "haz"), aes(x = sd, y = reorder(mo
     theme_light()
 
 ggsave("posterior_sd_compare.pdf", width = 4, height = 6)
-    
+
 # maps of results ####
 # n_cats <- 15
 # plot.palette <- viridis(n_cats)
@@ -411,7 +411,7 @@ ggsave("med_estimate_compare_univariate.pdf",
        width = 8, height = 10)
 
 twoway_comp_plot(all.results %>% filter(model_name %in% c("Bivariate direct",  
-                                                     "Bivariate nonshared IID", "Bivariate shared IID")), "pred")
+                                                          "Bivariate nonshared IID", "Bivariate shared IID")), "pred")
 ggsave("med_estimate_compare_bivariate_IID.pdf",
        width = 8, height = 10)
 
