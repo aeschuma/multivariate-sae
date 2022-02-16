@@ -14,7 +14,7 @@ library(tidyverse)
 # directory to save results
 savedir <- paste0(root,"Dropbox/dissertation_2/survey-csmf/results/stage-2-simulation")
 
-testing <- TRUE 
+testing <- FALSE 
 
 # Set parameters! ####
 if (testing) {
