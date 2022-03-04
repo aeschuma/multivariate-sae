@@ -1,2 +1,8 @@
-run_number,dgm_number,nsims
+"run_number","dgm_number","nsims"
 0,NA,NA
+1,1,100
+2,2,100
+3,1,100
+4,2,100
+5,1,100
+6,2,100
