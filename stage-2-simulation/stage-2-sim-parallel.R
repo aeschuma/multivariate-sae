@@ -23,7 +23,7 @@ if (root == "P:/") {
 
 ## load libraries
 library(mvtnorm); library(MASS);library(gtools); library(parallel);
-library(scales); library(RColorBrewer); library(ggplot2); library(tidyr); library(dplyr);
+library(scales); library(RColorBrewer); library(ggplot2); library(tidyverse); library(dplyr);
 library(haven); library(knitr); library(INLA); library(readr);
 
 ## TESTING THE CODE?
