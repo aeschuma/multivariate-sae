@@ -10,7 +10,7 @@ root <- ifelse(Sys.info()[1]=="Darwin","~/",
 ## TESTING THE CODE?
 ########
 
-testing <- TRUE
+testing <- FALSE
 
 ## define directories
 
