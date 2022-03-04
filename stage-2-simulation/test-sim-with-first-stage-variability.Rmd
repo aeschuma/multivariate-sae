@@ -590,7 +590,8 @@ fitINLA <- function(formula, data, lincombs) {
          control.predictor = list(compute=T),
          control.compute = list(config=T, waic = TRUE, dic = TRUE, cpo = TRUE),
          control.inla = list(lincomb.derived.correlation.matrix=T),
-         control.fixed = list(prec = list(default = 0.001), correlation.matrix=T))
+         control.fixed = list(prec = list(default = 0.001), correlation.matrix=T),
+         quantiles=c(0.025, 0.1, 0.5, 0.9, 0.975))
 }
 
 # load raw data
@@ -641,8 +642,8 @@ convolved_re_1 <- (sqrt(1 - rho[1]) * v_1) + (sqrt(rho[1] / scaling_factor) * u_
 convolved_re_2 <- (sqrt(1 - rho[2]) * v_2) + (sqrt(rho[2] / scaling_factor) * u_2)
 
 # calculate latent means
-mu_r_1 <- beta[1] + convolved_re_1 * sigma[1] + lambda * convolved_re_2 * sigma[2]
-mu_r_2 <- beta[2] + convolved_re_2 * sigma[2]
+mu_r_1 <- beta[1] + (convolved_re_1 * sigma[1]) + (lambda * convolved_re_2 * sigma[2])
+mu_r_2 <- beta[2] + (convolved_re_2 * sigma[2])
 mu_r <- cbind(mu_r_1, mu_r_2)
 
 # what measures do we want to calculate
@@ -655,10 +656,11 @@ measures <- c("mean bias",
               "95% width")
 
 # start simulations
-set.seed(80085)
-n_sim <- 100
+set.seed(8008135)
+n_sim <- 50
+
 sim_results <- list(direct_estimates = NA,
-                    univariate_iid = NA)
+                    bivariate_shared_bym = NA)
 for (i in 1:length(sim_results)) {
     sim_results[[i]] <- array(NA, dim = c(length(measures), n_sim, n_regions*2))
     # sim_results[[i]] <- tibble(bias = rep(NA, n_sim),
@@ -670,11 +672,86 @@ for (i in 1:length(sim_results)) {
     #                           width_95 = rep(NA, n_sim))
 }
 
+# define model components ####
+
+## priors ####
+iid_prior <- list(prec = list(prior = "pc.prec",
+                              param = c(1, 0.01)))
+bym2_prior <- list(phi=list(prior="logitbeta", param=c(1, 1), initial=0.5), 
+                   prec=list(prior="pc.prec", param=c(1, 0.01), initial=5))
+lambda_prior <- list(beta = list(prior = 'logtnormal', param = c(0, 1)))
+
+## Diagonal V formula additions ####
+
+### we now have to add one 'iid2d' model for each observation pair,
+### since their cov.matrix is different. we have to do this
+### automatically... here I add numbers directly for simplicity
+
+### bivariate
+add.bivariate <- ""
+for(j in 1:Nt) {
+    corr <-  results$corr.bi[j]
+    init.prec.haz <-  log(results$seHAZ.bi[j]^(-2))
+    init.prec.waz <-  log(results$seWAZ.bi[j]^(-2))
+    
+    add.bivariate <-  paste(add.bivariate, paste(" + 
+                     f(", paste("ii.", j, sep=""), ", model=\"iid2d\", n=2,
+                     hyper = list(
+                     prec1 = list(
+                     initial =", init.prec.haz,", 
+                     fixed = TRUE),
+                     prec2 = list(
+                     initial =", init.prec.waz,", 
+                     fixed = TRUE),
+                     cor = list(
+                     initial = log((1+", corr, ")/(1-", corr, ")), 
+                     fixed = TRUE)))"))
+    
+}
+
+## Model formula ####
+formula.bivariate.shared.bym <-  formula(paste("value ~ -1 + outcome + 
+                                            f(admin1.haz, model = 'bym2',
+                                              graph = admin1.mat, 
+                                              scale.model = T, 
+                                              constr = T,
+                                              hyper = bym2_prior) +
+                                            f(admin1.waz, model = 'bym2',
+                                              graph = admin1.mat, 
+                                              scale.model = T, 
+                                              constr = T,
+                                              hyper = bym2_prior) +
+                                            f(admin1.haz.2, copy = \"admin1.waz\", 
+                                              fixed = FALSE, hyper = lambda_prior)",
+                                               paste(add.bivariate, collapse = " ")))
+
+## linear combinations ####
+
+# linear combination of preds without 2x2 REs
+lc.vec.fe <- c(rep(1, n_regions))
+
+diag.na.mat <- matrix(NA, nrow = n_regions, ncol = n_regions)
+diag(diag.na.mat) <- 1
+lc.vec.admin1.re <- diag.na.mat
+
+## WAZ
+lc.all.waz <- inla.make.lincombs(outcomeWAZ = lc.vec.fe, 
+                                 admin1.waz = lc.vec.admin1.re)
+names(lc.all.waz) <- gsub("lc", "waz.reg.", names(lc.all.waz))
+
+## HAZ shared
+lc.all.haz.shared <- inla.make.lincombs(outcomeHAZ = lc.vec.fe, 
+                                        admin1.haz = lc.vec.admin1.re,
+                                        admin1.haz.2 = lc.vec.admin1.re)
+names(lc.all.haz.shared) <- gsub("lc", "haz.reg.", names(lc.all.haz.shared))
+
+
 for(s in 1:n_sim) {
     
+    cat(paste0("Starting sim ", s, "..."))
     # simulate direct estimates
     y_hat_r <- matrix(NA, nrow = n_regions, ncol = 2)
-    V_hat_r <- V_r
+    V_hat_r <- array(NA, dim = dim(V_r))
     for (i in 1:n_regions) {
         y_hat_r[i,] <- rmvnorm(1, mu_r[i,], V_r[i, , ])
     
@@ -697,35 +774,81 @@ for(s in 1:n_sim) {
     sim_results$direct_estimates[6, s, ] <- (ci_80_direct[,2] - ci_80_direct[,1])
     sim_results$direct_estimates[7, s, ] <- (ci_95_direct[,2] - ci_95_direct[,1])
     
-    # # prep for inla model
-    # data <- list(y = y_hat_r,
-    #              admin1 = 1:n_regions)
-    # formula <- as.formula("y ~ 1 + f(admin1, model = 'iid')")
-    # scaling <- 1/V_hat_r
-    # 
-    # # fit smoothing models
-    # mod1 <- inla(formula,
-    #              family = "gaussian",
-    #              data = data,
-    #              control.family = list(hyper = list(prec = list(initial = log(1), fixed=T))),
-    #              control.predictor = list(compute=T),
-    #              control.compute = list(config=T, waic = TRUE, dic = TRUE, cpo = TRUE),
-    #              control.inla = list(lincomb.derived.correlation.matrix=T),
-    #              scale = scaling,
-    #              quantiles = c(0.025, 0.1, 0.5, 0.9, 0.975))
-    # fitted_res <- mod1$summary.fitted.values
-    # latent_means <- fitted_res$`0.5quant`
-    # 
-    # # calculate bias results for direct estimates
-    # sim_results$univariate_iid[1, s, ] <- latent_means - mu_r
-    # sim_results$univariate_iid[2, s, ] <- abs(latent_means - mu_r)
-    # sim_results$univariate_iid[3, s, ] <- abs(latent_means - mu_r)/abs(mu_r)
-    # 
-    # # calculate coverage and width results
-    # sim_results$univariate_iid[4, s, ] <- (mu_r >= fitted_res$`0.1quant`) & (mu_r <= fitted_res$`0.9quant`)
-    # sim_results$univariate_iid[5, s, ] <- (mu_r >= fitted_res$`0.025quant`) & (mu_r <= fitted_res$`0.975quant`)
-    # sim_results$univariate_iid[6, s, ] <- (fitted_res$`0.9quant` - fitted_res$`0.1quant`)
-    # sim_results$univariate_iid[7, s, ] <- (fitted_res$`0.975quant` - fitted_res$`0.025quant`)
+    # prep for inla model
+    ## calculate correlation
+    num_corrs <- dim(V_hat_r)[1]
+    my.corrs_hat <- rep(NA, num_corrs)
+    for (j in 1:num_corrs) {
+        Vtmp <- V_hat_r[j,,]
+        D <- diag(sqrt(diag(Vtmp)))
+        DInv <- solve(D)
+        corr.tmp <- DInv %*% Vtmp %*% DInv
+        my.corrs_hat[j] <- corr.tmp[1,2]
+    }
+    results <- tibble(admin1 = 1:n_regions,
+                      meanHAZ.bi = y_hat_r[, 1],
+                      meanWAZ.bi = y_hat_r[, 2],
+                      seHAZ.bi = sqrt(V_hat_r[,1,1]),
+                      seWAZ.bi = sqrt(V_hat_r[,2,2]),
+                      corr.bi = my.corrs_hat)
+    results.long <- results %>% select(admin1,
+                                       meanHAZ.bi, meanWAZ.bi) %>%
+        pivot_longer(cols = c(meanHAZ.bi, meanWAZ.bi),
+                     names_to = "outcome",
+                     names_prefix = "mean",
+                     values_to = "value")
+    results.long$outcome <- ifelse(results.long$outcome == "HAZ.bi", "HAZ", "WAZ")
+    results.long$admin1.haz <- ifelse(results.long$outcome == "HAZ", results.long$admin1, NA)
+    results.long$admin1.waz <- ifelse(results.long$outcome == "WAZ", results.long$admin1, NA)
+    results.long$obs <- 1:nrow(results.long)
+    
+    # create a list of the data
+    data <- as.list(results.long)
+    data$weights <- rep(1, n_regions)
+    
+    Nt <- length(unique(data$admin1))
+    N <- length(data$admin1)
+    n_regions <- Nt
+    
+    ## Define the index-vectors ii.1 ii.2 etc, which are the
+    ## index's for the iid2d-model at timepoint 1, 2, ...
+    for(j in 1:Nt) {
+        itmp <-  numeric(N)
+        itmp[] <-  NA
+        itmp[(j-1)*2 + 1] <-  1
+        itmp[(j-1)*2 + 2] <-  2
+        data <-  c(list(itmp), data)
+        names(data)[1] <-  paste("ii.", j, sep="")
+    }
+    
+    ## add another index for the shared component
+    data$admin1.haz.2 <- data$admin1.haz
+    
+    ## add indeces for iid components in besag + iid formulation
+    data$admin1.haz.iid <- data$admin1.haz
+    data$admin1.waz.iid <- data$admin1.waz
+    
+    # Fit models ####
+    cat(paste(" fitting ivariate shared BYM model... "))
+    mod.bivariate.shared.bym <- fitINLA(formula = formula.bivariate.shared.bym, 
+                                        data = data, 
+                                        lincombs = c(lc.all.haz.shared, lc.all.waz))
+
+    fitted_res <- mod.bivariate.shared.bym$summary.lincomb.derived[grep("reg",rownames(mod.bivariate.shared.bym$summary.lincomb.derived)),]
+    latent_means <- fitted_res$`0.5quant`
+
+    # calculate bias results for direct estimates
+    sim_results$bivariate_shared_bym[1, s, ] <- latent_means - as.vector(mu_r)
+    sim_results$bivariate_shared_bym[2, s, ] <- abs(latent_means - as.vector(mu_r))
+    sim_results$bivariate_shared_bym[3, s, ] <- abs(latent_means - as.vector(mu_r))/abs(as.vector(mu_r))
+
+    # calculate coverage and width results
+    sim_results$bivariate_shared_bym[4, s, ] <- (as.vector(mu_r) >= fitted_res$`0.1quant`) & (as.vector(mu_r) <= fitted_res$`0.9quant`)
+    sim_results$bivariate_shared_bym[5, s, ] <- (as.vector(mu_r) >= fitted_res$`0.025quant`) & (as.vector(mu_r) <= fitted_res$`0.975quant`)
+    sim_results$bivariate_shared_bym[6, s, ] <- (fitted_res$`0.9quant` - fitted_res$`0.1quant`)
+    sim_results$bivariate_shared_bym[7, s, ] <- (fitted_res$`0.975quant` - fitted_res$`0.025quant`)
+    
+    cat(paste0("done! \n"))
 }
 
 # compile results
@@ -735,7 +858,7 @@ sim_results_compiled <- lapply(sim_results_region, function(x) {apply(x, 2, mean
 # plot region-level results
 par(mfrow = c(ceiling(length(measures)/2), 2))
 for (i in 1:length(measures)) {
-    plot(sim_results_region$univariate_iid[, i] ~ sim_results_region$direct_estimates[, i],
+    plot(sim_results_region$bivariate_shared_bym[, i] ~ sim_results_region$direct_estimates[, i],
          pch = 19, col = rgb(0, 0, 0, alpha = 0.5), xlab = "direct estimates", ylab = "IID models",
          main = measures[i])
     abline(0, 1, col = "darkgreen")
