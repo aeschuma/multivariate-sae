@@ -44,29 +44,29 @@ for (rn in 1:length(run_numbers)) {
     run_number <- run_numbers[rn]
     
     tmp.resfiles <- grep(paste0("results_run-", run_number, "_sim-"), resfiles, value = TRUE)
-    tmp.diagfiles <- grep(paste0("standiags_run-", run_number), diagfiles, value = TRUE)
-    
+
     # compile results
     results <- readRDS(tmp.resfiles[1])
-    paramnames <- as.character(results$param)
-    measurenames <- names(results)[which(names(results) != "param")]
-    results <- array(NA, c(nrow(results), ncol(results) - 1, length(tmp.resfiles)))
+    paramnames <- vector(mode = "list", length = length(results))
+    measurenames <- vector(mode = "list", length = length(results))
+    results_comp <- vector(mode = "list", length = length(results))
+    for (j in 1:length(results)) {
+        paramnames[[j]] <- as.character(results[[j]]$param)
+        measurenames[[j]] <- names(results[[j]])[which(names(results[[j]]) != "param")]
+        results[[j]] <- array(NA, c(nrow(results[[j]]), ncol(results[[j]]) - 1, length(tmp.resfiles)))
+    }    
     for (i in 1:length(tmp.resfiles)) {
-        results[,,i] <- as.matrix(readRDS(tmp.resfiles[i])[, measurenames])
+        tmpres <- readRDS(tmp.resfiles[i])
+        for (j in 1:length(tmpres)) {
+            results[[j]][,,i] <- as.matrix(tmpres[[j]][, measurenames[[j]]])
+        }
     }
-    results_comp <- cbind(paramnames, as.data.frame(apply(results, c(1, 2), mean)))
-    names(results_comp) <- c("param", paste0("mean_",measurenames))
-    
-    # compile diagnosics
-    diags <- readRDS(tmp.diagfiles[1])
-    stan_diag_names <- names(diags)
-    diags <- matrix(NA, nrow = length(tmp.diagfiles), ncol = ncol(diags))
-    for (i in 1:length(tmp.diagfiles)) {
-        diags[i,] <- as.matrix(readRDS(tmp.diagfiles[i]))
+    for (j in 1:length(results)) {
+        results_comp[[j]] <- cbind(paramnames[[j]], as.data.frame(apply(results[[j]], c(1, 2), mean)))
+        names(results_comp[[j]]) <- c("param", paste0("mean_",measurenames[[j]]))
     }
-    diags_comp <- as.data.frame(t(apply(diags, 2, mean)))
-    names(diags_comp) <- paste0("mean_", stan_diag_names)
-    
+   
+   
     if (!testing) {
         
         # save results
