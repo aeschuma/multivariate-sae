@@ -79,7 +79,7 @@ simulated_data <- simulateData(dgm_specs = my_dgm,
                                n_r = table(dat$admin1),
                                Amat = admin1.mat, 
                                scaling_factor = scaling_factor, 
-                               seed_re = ifelse(random_re, sim + 500, 98125), 
+                               seed_re = ifelse(random_re, sim + 500, 981250), 
                                seed_lik = sim,
                                testing = FALSE)
 

@@ -238,6 +238,67 @@ sim_results_table <- tibble(measure = measures,
 kable(sim_results_table, format = 'markdown', col.names = c("measure", "Direct", "IID model"), digits = 4,
       caption = paste0("Simulation results for ", n_sim, " simulations, univariate DGM"))
 ```
+
+# 2-dimensional data
+
+## IID latent mean model
+
+Before we try simulating data with both IID and ICAR components, we will first look at the IID-only case.
+
+### Data generating mechanism
+
+Let $r = 1, \dots, R$ index region and $c = 1, 2$ index outcomes. The region-level means will be generated as
+
+\eq{
+    \mu_{rc} &= \beta_c + v_{rc} \\
+    v_{rc} &\overset{iid}{\sim} N(0,\sigma^2_c).
+}
+
+with $\beta_c$ set to be the estimated intercept and $\sigma^2_c$ set to be the estimated variances of the random effects from a model fit to the 2014 KDHS HAZ data. The random effects will only be simulated once and the same ones will be used across all simulations.
+
+Once we have these $\mu_{r}$ values, we will simulate the area-level sample means as
+
+\eq{
+    \hat{y}_r | \mu_r, V_r &\sim N(\mu_r, V_r)
+}
+
+where the $V_r$ are set to be equal to the asymptotic design-based variance estimate, $\hat{V}^{des}_r$, of the area-level mean HAZ from the 2014 KDHS data.
+
+Now, for an SRS, the sampling distribution of the area-level sample variances is
+
+\eq{
+    \hat{V}^{srs}_r | V_r, n_r \sim \Gamma\left(\frac{n_r - 1}{2}, \frac{n_r - 1}{2 V_r}\right) 
+}
+
+where $n_r$ is the sample size of an SRS in area $r$. The 2014 KDHS uses a stratified cluster design rather than an SRS, which has a different sampling variance than an SRS. The ratio of the variance for a statistic calculated using a specific survey design to the variance of that statistic calculated using an SRS of the same sample size is called the design effect,
+
+\eq{
+    d^2 &= \frac{\hat{V}}{\hat{V}^{srs}}.
+}
+
+In the a typical DHS, the average design effect across all indicators is $d^2 = 1.5^2 = 2.25$ (taken from this answer on the DHS user forum: https://userforum.dhsprogram.com/index.php?t=msg&goto=3448&S=Google). Thus, for our simulation we will let $n_r$ be the number of sampled children with HAZ scores in each region, and we will calculate the effective sample size that would be needed from an SRS in order to have the same sampling variance as the DHS sampling design. 
+
+Since the variance of a $\Gamma(\alpha, \beta)$ distribution is $\alpha/\beta^2$, we have
+
+\eq{
+    \Var(\hat{V}^{srs}_r) &= \frac{\left(\frac{n_r-1}{2}\right)}{\left(\frac{n_r-1}{2 V_r}\right)^2} \\
+    &= \frac{2 (V_r)^2}{(n_r - 1)}.
+}
+
+Now, we want $\hat{V}_r = 2.25 \times \hat{V}^{srs}_r = 2.25 \times \frac{2 (V_r)^2}{(n_r - 1)} = \frac{2 (V_r)^2}{\left((n_r - 1)/2.25\right)} \approx \frac{2 (V_r)^2}{\left((n_r/2.25 - 1)\right)}$, which yields an effective sample size of $n_r^* = n_r/2.25$ (as long as $n_r$ is sufficiently large). 
+
+Thus, we will simulate the area-level sample variances as
+
+\eq{
+    \hat{V}_r | V_r, n_r^* \sim \Gamma\left(\frac{(n_r^* - 1)}{2}, \frac{n_r^* - 1}{2 V_r}\right).
+}
+
+In each simulation, we will have the same values of $\mu_r$ and $V_r$, and we use these to simulate $\hat{y}_r$ and $\hat{V}_r$. We will treat the $\hat{y}_r$ as pseudo-direct estimates and calculate asymptotic 95\% confidence intervals as $\hat{y}_r \pm t_{n_r^*-1, 0.975}\sqrt{\hat{V}_r}$. We will also fit an IID smoothing model to the pseudo-direct estimates to estimate the latent means in each region with corresponding 95\% credible intervals. This smoothing model will be correctly specified to match the data generating mechanism and be fit via a Bayesian model with relatively uninformative priors.
+
+```{r}
+
+```
+
 <!-- ## IID + ICAR latent mean model -->
 
 <!-- ### Data generating mechanism -->
