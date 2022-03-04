@@ -30,7 +30,7 @@ simulateData <- function(dgm_specs, n_r, Amat, scaling_factor, seed_re, seed_lik
     # testing
     if (testing == TRUE) {
         dgm_specs <- my_dgm
-        n_r <- table(dat$admin1)
+        n_r <- table(dat$admin1)/(1.5^2)
         Amat <- admin1.mat
         scaling_factor <- scaling_factor
         seed_re <- 80085
@@ -241,7 +241,7 @@ simulateData <- function(dgm_specs, n_r, Amat, scaling_factor, seed_re, seed_lik
     y <- matrix(NA, nrow = n_regions, ncol = 2)
     mu <- matrix(NA, nrow = n_regions, ncol = 2)
     for (i in 1:n_regions) {
-        mu[i, ] <- c(mean_pars["beta[1]"] + (convolved_re_1[i] * mean_pars["sigma[1]"]) + (mean_pars["lambda"] * convolved_re_2[i]), 
+        mu[i, ] <- c(mean_pars["beta[1]"] + (convolved_re_1[i] * mean_pars["sigma[1]"]) + (mean_pars["lambda"] * convolved_re_2[i] * mean_pars["sigma[2]"]), 
                      mean_pars["beta[2]"] + (convolved_re_2[i] * mean_pars["sigma[2]"]))
         y[i, ] <- rmvnorm(1, mu[i, ], V.array[i,,])
     }
@@ -265,8 +265,8 @@ simulateData <- function(dgm_specs, n_r, Amat, scaling_factor, seed_re, seed_lik
     results <- tibble(admin1 = 1:n_regions,
                       meanHAZ.bi = y[, 1],
                       meanWAZ.bi = y[, 2],
-                      seHAZ.bi = V_hat_array[,1,1],
-                      seWAZ.bi = V_hat_array[,2,2],
+                      seHAZ.bi = sqrt(V_hat_array[,1,1]),
+                      seWAZ.bi = sqrt(V_hat_array[,2,2]),
                       corr.bi = my.corrs_hat)
     results.long <- results %>% select(admin1,
                                        meanHAZ.bi, meanWAZ.bi) %>%

@@ -14,7 +14,7 @@ library(scales); library(RColorBrewer); library(ggplot2); library(tidyverse); li
 library(haven); library(knitr); library(INLA); library(readr);
 
 ## TESTING THE CODE?
-testing <- FALSE
+testing <- TRUE
 
 ## define directories
 
@@ -76,7 +76,7 @@ my_dgm <- my_dgm %>% dplyr::select(-geo_data, -random_re)
 cat(paste("Simulate data \n"))
 # Simulate data ####
 simulated_data <- simulateData(dgm_specs = my_dgm, 
-                               n_r = table(dat$admin1),
+                               n_r = table(dat$admin1)/(1.5^2),
                                Amat = admin1.mat, 
                                scaling_factor = scaling_factor, 
                                seed_re = ifelse(random_re, sim + 500, 981250), 

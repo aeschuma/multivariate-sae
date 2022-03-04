@@ -10,7 +10,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(echo = FALSE, cache = TRUE)
 library(SUMMER)
 library(tidyverse)
 library(spdep)
@@ -254,52 +254,493 @@ Let $r = 1, \dots, R$ index region and $c = 1, 2$ index outcomes. The region-lev
     v_{rc} &\overset{iid}{\sim} N(0,\sigma^2_c).
 }
 
-with $\beta_c$ set to be the estimated intercept and $\sigma^2_c$ set to be the estimated variances of the random effects from a model fit to the 2014 KDHS HAZ data. The random effects will only be simulated once and the same ones will be used across all simulations.
+with $\beta_c$ set to be the estimated intercept and $\sigma^2_c$ set to be the estimated variances of the random effects from a model fit to the 2014 KDHS HAZ and WAZ data. The random effects will only be simulated once and the same ones will be used across all simulations.
 
-Once we have these $\mu_{r}$ values, we will simulate the area-level sample means as
+Once we have these $\mu_{rc}$ values, we will simulate the area-level sample means as
 
 \eq{
-    \hat{y}_r | \mu_r, V_r &\sim N(\mu_r, V_r)
+    \hat{\bm{y}}_{r} | \bm\mu_{r}, \bm{V}_r &\sim N_2(\bm\mu_r, \bm{V}_r)
 }
 
-where the $V_r$ are set to be equal to the asymptotic design-based variance estimate, $\hat{V}^{des}_r$, of the area-level mean HAZ from the 2014 KDHS data.
+where the $\bm{V}_r$ are set to be equal to the estimated asymptotic design-based covariance matrix, $\hat{V}^{des}_r$, of the area-level mean HAZ and WAZ from the 2014 KDHS data.
 
-Now, for an SRS, the sampling distribution of the area-level sample variances is
+Now, for an SRS, the sampling distribution of the area-level sample covariance matrices is
 
 \eq{
-    \hat{V}^{srs}_r | V_r, n_r \sim \Gamma\left(\frac{n_r - 1}{2}, \frac{n_r - 1}{2 V_r}\right) 
+    (n_r - 1) \hat{\bm{V}}^{srs}_r | V_r, n_r \sim \text{Wishart}\left( \bm{V}_r, (n_r-1) \right) 
 }
 
-where $n_r$ is the sample size of an SRS in area $r$. The 2014 KDHS uses a stratified cluster design rather than an SRS, which has a different sampling variance than an SRS. The ratio of the variance for a statistic calculated using a specific survey design to the variance of that statistic calculated using an SRS of the same sample size is called the design effect,
+where $n_r$ is the sample size of an SRS in area $r$. We will again adjust for the survey design effect, giving us
 
 \eq{
-    d^2 &= \frac{\hat{V}}{\hat{V}^{srs}}.
-}
-
-In the a typical DHS, the average design effect across all indicators is $d^2 = 1.5^2 = 2.25$ (taken from this answer on the DHS user forum: https://userforum.dhsprogram.com/index.php?t=msg&goto=3448&S=Google). Thus, for our simulation we will let $n_r$ be the number of sampled children with HAZ scores in each region, and we will calculate the effective sample size that would be needed from an SRS in order to have the same sampling variance as the DHS sampling design. 
-
-Since the variance of a $\Gamma(\alpha, \beta)$ distribution is $\alpha/\beta^2$, we have
-
-\eq{
-    \Var(\hat{V}^{srs}_r) &= \frac{\left(\frac{n_r-1}{2}\right)}{\left(\frac{n_r-1}{2 V_r}\right)^2} \\
-    &= \frac{2 (V_r)^2}{(n_r - 1)}.
-}
-
-Now, we want $\hat{V}_r = 2.25 \times \hat{V}^{srs}_r = 2.25 \times \frac{2 (V_r)^2}{(n_r - 1)} = \frac{2 (V_r)^2}{\left((n_r - 1)/2.25\right)} \approx \frac{2 (V_r)^2}{\left((n_r/2.25 - 1)\right)}$, which yields an effective sample size of $n_r^* = n_r/2.25$ (as long as $n_r$ is sufficiently large). 
-
-Thus, we will simulate the area-level sample variances as
-
-\eq{
-    \hat{V}_r | V_r, n_r^* \sim \Gamma\left(\frac{(n_r^* - 1)}{2}, \frac{n_r^* - 1}{2 V_r}\right).
+    \hat{\bm{V}}^{srs}_r | V_r, n_r \sim \frac{1}{(n^*_r - 1)}\text{Wishart}\left( \bm{V}_r, (n^*_r - 1) \right) 
 }
 
 In each simulation, we will have the same values of $\mu_r$ and $V_r$, and we use these to simulate $\hat{y}_r$ and $\hat{V}_r$. We will treat the $\hat{y}_r$ as pseudo-direct estimates and calculate asymptotic 95\% confidence intervals as $\hat{y}_r \pm t_{n_r^*-1, 0.975}\sqrt{\hat{V}_r}$. We will also fit an IID smoothing model to the pseudo-direct estimates to estimate the latent means in each region with corresponding 95\% credible intervals. This smoothing model will be correctly specified to match the data generating mechanism and be fit via a Bayesian model with relatively uninformative priors.
 
 ```{r}
+# functions ####
+fitINLA <- function(formula, data, lincombs) {
+    inla(formula, data = data, 
+         family = "gaussian",
+         lincomb = lincombs,
+         control.family = list(hyper = list(prec = list(initial = 10, fixed=T))), 
+         control.predictor = list(compute=T),
+         control.compute = list(config=T, waic = TRUE, dic = TRUE, cpo = TRUE),
+         control.inla = list(lincomb.derived.correlation.matrix=T),
+         control.fixed = list(prec = list(default = 0.001), correlation.matrix=T))
+}
 
+# load raw data
+load(paste0(dropbox_dir, "/../../data/ken_dhs2014/data/haz-waz-kenDHS2014.rda"))
+n_regions <- length(unique(dat$admin1))
+
+# extract values from data
+n_r <- table(dat$admin1)
+d <- 1.5
+n_r_star <- n_r/(d^2)
+# load direct estimates
+direct_estimates <- read_rds(paste0(dropbox_dir,"/../ken2014-hazwaz/ken2014-hazwaz-stage-1.rds"))
+V_r <- direct_estimates[["V.array"]]
+
+# load 2014 KDHS HAZ/WAZ modeling results
+inla_results <- readRDS(paste0(dropbox_dir, "/../ken2014-hazwaz/ken2014-hazwaz-stage-2-inla-all.rds"))
+
+# extract parameters from model for sim
+beta <- inla_results[["Bivariate nonshared IID"]]$summary.fixed$`0.5quant`
+sigma <- (inla_results[["Bivariate nonshared IID"]]$summary.hyperpar$`0.5quant`)^{-1/2}
+
+# simulate a single set of random effects
+set.seed(8008135)
+v_r_1 <- rnorm(n_regions, 0, sigma[1])
+v_r_2 <- rnorm(n_regions, 0, sigma[2])
+
+# calculate latent means
+mu_r_1 <- beta[1] + v_r_1
+mu_r_2 <- beta[2] + v_r_2
+mu_r <- cbind(mu_r_1, mu_r_2)
+
+# what measures do we want to calculate
+measures <- c("mean bias",
+              "mean absolute bias",
+              "mean relative bias",
+              "80% coverage",
+              "95% coverage",
+              "80% width",
+              "95% width")
+
+# start simulations
+set.seed(80085)
+n_sim <- 100
+sim_results <- list(direct_estimates = NA,
+                    univariate_iid = NA)
+for (i in 1:length(sim_results)) {
+    sim_results[[i]] <- array(NA, dim = c(length(measures), n_sim, n_regions*2))
+    # sim_results[[i]] <- tibble(bias = rep(NA, n_sim),
+    #                           abs_bias = rep(NA, n_sim),
+    #                           rel_abs_bias = rep(NA, n_sim),
+    #                           coverage_80 = rep(NA, n_sim),
+    #                           width_80 = rep(NA, n_sim),
+    #                           coverage_95 = rep(NA, n_sim),
+    #                           width_95 = rep(NA, n_sim))
+}
+
+for(s in 1:n_sim) {
+    
+    # simulate direct estimates
+    y_hat_r <- matrix(NA, nrow = n_regions, ncol = 2)
+    V_hat_r <- V_r
+    for (i in 1:n_regions) {
+        y_hat_r[i,] <- rmvnorm(1, mu_r[i,], V_r[i, , ])
+    
+        # simulate V_des
+        V_hat_r[i,,] <- rWishart(1, (n_r_star[i] - 1), V_r[i,,])/(n_r_star[i] - 1)
+    }
+    
+    # calculate bias results for direct estimates
+    sim_results$direct_estimates[1, s, ] <- as.vector(y_hat_r - mu_r)
+    sim_results$direct_estimates[2, s, ] <- abs(as.vector(y_hat_r) - as.vector(mu_r))
+    sim_results$direct_estimates[3, s, ] <- abs(as.vector(y_hat_r) - as.vector(mu_r))/abs(as.vector(mu_r))
+    
+    # calculate CIs
+    ci_80_direct <- t(rbind(as.vector(y_hat_r), as.vector(y_hat_r)) + t(t(c(-1, 1))) %*% t(qnorm(0.9)*sqrt(c(V_hat_r[, 1, 1], V_hat_r[, 2, 2]))))
+    ci_95_direct <- t(rbind(as.vector(y_hat_r), as.vector(y_hat_r)) + t(t(c(-1, 1))) %*% t(qnorm(0.975)*sqrt(c(V_hat_r[, 1, 1], V_hat_r[, 2, 2]))))
+    
+    # calculate coverage and width results
+    sim_results$direct_estimates[4, s, ] <- (as.vector(mu_r) >= ci_80_direct[,1]) & (as.vector(mu_r) <= ci_80_direct[,2])
+    sim_results$direct_estimates[5, s, ] <- (as.vector(mu_r) >= ci_95_direct[,1]) & (as.vector(mu_r) <= ci_95_direct[,2])
+    sim_results$direct_estimates[6, s, ] <- (ci_80_direct[,2] - ci_80_direct[,1])
+    sim_results$direct_estimates[7, s, ] <- (ci_95_direct[,2] - ci_95_direct[,1])
+    
+    # # prep for inla model
+    # data <- list(y = y_hat_r,
+    #              admin1 = 1:n_regions)
+    # formula <- as.formula("y ~ 1 + f(admin1, model = 'iid')")
+    # scaling <- 1/V_hat_r
+    # 
+    # # fit smoothing models
+    # mod1 <- inla(formula,
+    #              family = "gaussian",
+    #              data = data,
+    #              control.family = list(hyper = list(prec = list(initial = log(1), fixed=T))),
+    #              control.predictor = list(compute=T),
+    #              control.compute = list(config=T, waic = TRUE, dic = TRUE, cpo = TRUE),
+    #              control.inla = list(lincomb.derived.correlation.matrix=T),
+    #              scale = scaling,
+    #              quantiles = c(0.025, 0.1, 0.5, 0.9, 0.975))
+    # fitted_res <- mod1$summary.fitted.values
+    # latent_means <- fitted_res$`0.5quant`
+    # 
+    # # calculate bias results for direct estimates
+    # sim_results$univariate_iid[1, s, ] <- latent_means - mu_r
+    # sim_results$univariate_iid[2, s, ] <- abs(latent_means - mu_r)
+    # sim_results$univariate_iid[3, s, ] <- abs(latent_means - mu_r)/abs(mu_r)
+    # 
+    # # calculate coverage and width results
+    # sim_results$univariate_iid[4, s, ] <- (mu_r >= fitted_res$`0.1quant`) & (mu_r <= fitted_res$`0.9quant`)
+    # sim_results$univariate_iid[5, s, ] <- (mu_r >= fitted_res$`0.025quant`) & (mu_r <= fitted_res$`0.975quant`)
+    # sim_results$univariate_iid[6, s, ] <- (fitted_res$`0.9quant` - fitted_res$`0.1quant`)
+    # sim_results$univariate_iid[7, s, ] <- (fitted_res$`0.975quant` - fitted_res$`0.025quant`)
+}
+
+# compile results
+sim_results_region <- lapply(sim_results, function(x) {t(apply(x, c(1,3), mean))})
+sim_results_compiled <- lapply(sim_results_region, function(x) {apply(x, 2, mean)})
+
+# plot region-level results
+par(mfrow = c(ceiling(length(measures)/2), 2))
+for (i in 1:length(measures)) {
+    plot(sim_results_region$univariate_iid[, i] ~ sim_results_region$direct_estimates[, i],
+         pch = 19, col = rgb(0, 0, 0, alpha = 0.5), xlab = "direct estimates", ylab = "IID models",
+         main = measures[i])
+    abline(0, 1, col = "darkgreen")
+}
 ```
 
-<!-- ## IID + ICAR latent mean model -->
+## IID + ICAR latent mean model
+
+Now we will fit IID + ICAR models
+
+### Results
+
+```{r}
+# functions ####
+fitINLA <- function(formula, data, lincombs) {
+    inla(formula, data = data, 
+         family = "gaussian",
+         lincomb = lincombs,
+         control.family = list(hyper = list(prec = list(initial = 10, fixed=T))), 
+         control.predictor = list(compute=T),
+         control.compute = list(config=T, waic = TRUE, dic = TRUE, cpo = TRUE),
+         control.inla = list(lincomb.derived.correlation.matrix=T),
+         control.fixed = list(prec = list(default = 0.001), correlation.matrix=T))
+}
+
+# load raw data
+load(paste0(dropbox_dir, "/../../data/ken_dhs2014/data/haz-waz-kenDHS2014.rda"))
+n_regions <- length(unique(dat$admin1))
+
+# extract values from data
+n_r <- table(dat$admin1)
+d <- 1.5
+n_r_star <- n_r/(d^2)
+# load direct estimates
+direct_estimates <- read_rds(paste0(dropbox_dir,"/../ken2014-hazwaz/ken2014-hazwaz-stage-1.rds"))
+V_r <- direct_estimates[["V.array"]]
+
+# load 2014 KDHS HAZ/WAZ modeling results
+inla_results <- readRDS(paste0(dropbox_dir, "/../ken2014-hazwaz/ken2014-hazwaz-stage-2-inla-all.rds"))
+
+# extract parameters from model for sim
+beta <- inla_results[["Bivariate nonshared BYM"]]$summary.fixed$`0.5quant`
+sigma <- (inla_results[["Bivariate nonshared BYM"]]$summary.hyperpar[c("Precision for admin1.haz", "Precision for admin1.waz"), "0.5quant"])^{-1/2}
+rho <- (inla_results[["Bivariate nonshared BYM"]]$summary.hyperpar[c("Phi for admin1.haz", "Phi for admin1.waz"), "0.5quant"])
+
+# simulate a single set of random effects
+set.seed(8008135)
+v_1 <- rnorm(n_regions, 0, 1)
+v_2 <- rnorm(n_regions, 0, 1)
+
+Q <- admin1.mat * -1
+diag(Q) <- 0
+diag(Q) <- -1 * apply(Q, 2, sum)
+
+u_1 <- sim.Q(Q)
+u_2 <- sim.Q(Q) 
+
+## Convolved REs
+convolved_re_1 <- (sqrt(1 - rho[1]) * v_1) + (sqrt(rho[1] / scaling_factor) * u_1)
+convolved_re_2 <- (sqrt(1 - rho[2]) * v_2) + (sqrt(rho[2] / scaling_factor) * u_2)
+
+# calculate latent means
+mu_r_1 <- beta[1] + convolved_re_1 * sigma[1]
+mu_r_2 <- beta[2] + convolved_re_2 * sigma[2]
+mu_r <- cbind(mu_r_1, mu_r_2)
+
+# what measures do we want to calculate
+measures <- c("mean bias",
+              "mean absolute bias",
+              "mean relative bias",
+              "80% coverage",
+              "95% coverage",
+              "80% width",
+              "95% width")
+
+# start simulations
+set.seed(80085)
+n_sim <- 100
+sim_results <- list(direct_estimates = NA,
+                    univariate_iid = NA)
+for (i in 1:length(sim_results)) {
+    sim_results[[i]] <- array(NA, dim = c(length(measures), n_sim, n_regions*2))
+    # sim_results[[i]] <- tibble(bias = rep(NA, n_sim),
+    #                           abs_bias = rep(NA, n_sim),
+    #                           rel_abs_bias = rep(NA, n_sim),
+    #                           coverage_80 = rep(NA, n_sim),
+    #                           width_80 = rep(NA, n_sim),
+    #                           coverage_95 = rep(NA, n_sim),
+    #                           width_95 = rep(NA, n_sim))
+}
+
+for(s in 1:n_sim) {
+    
+    # simulate direct estimates
+    y_hat_r <- matrix(NA, nrow = n_regions, ncol = 2)
+    V_hat_r <- V_r
+    for (i in 1:n_regions) {
+        y_hat_r[i,] <- rmvnorm(1, mu_r[i,], V_r[i, , ])
+    
+        # simulate V_des
+        V_hat_r[i,,] <- rWishart(1, (n_r_star[i] - 1), V_r[i,,])/(n_r_star[i] - 1)
+    }
+    
+    # calculate bias results for direct estimates
+    sim_results$direct_estimates[1, s, ] <- as.vector(y_hat_r - mu_r)
+    sim_results$direct_estimates[2, s, ] <- abs(as.vector(y_hat_r) - as.vector(mu_r))
+    sim_results$direct_estimates[3, s, ] <- abs(as.vector(y_hat_r) - as.vector(mu_r))/abs(as.vector(mu_r))
+    
+    # calculate CIs
+    ci_80_direct <- t(rbind(as.vector(y_hat_r), as.vector(y_hat_r)) + t(t(c(-1, 1))) %*% t(qnorm(0.9)*sqrt(c(V_hat_r[, 1, 1], V_hat_r[, 2, 2]))))
+    ci_95_direct <- t(rbind(as.vector(y_hat_r), as.vector(y_hat_r)) + t(t(c(-1, 1))) %*% t(qnorm(0.975)*sqrt(c(V_hat_r[, 1, 1], V_hat_r[, 2, 2]))))
+    
+    # calculate coverage and width results
+    sim_results$direct_estimates[4, s, ] <- (as.vector(mu_r) >= ci_80_direct[,1]) & (as.vector(mu_r) <= ci_80_direct[,2])
+    sim_results$direct_estimates[5, s, ] <- (as.vector(mu_r) >= ci_95_direct[,1]) & (as.vector(mu_r) <= ci_95_direct[,2])
+    sim_results$direct_estimates[6, s, ] <- (ci_80_direct[,2] - ci_80_direct[,1])
+    sim_results$direct_estimates[7, s, ] <- (ci_95_direct[,2] - ci_95_direct[,1])
+    
+    # # prep for inla model
+    # data <- list(y = y_hat_r,
+    #              admin1 = 1:n_regions)
+    # formula <- as.formula("y ~ 1 + f(admin1, model = 'iid')")
+    # scaling <- 1/V_hat_r
+    # 
+    # # fit smoothing models
+    # mod1 <- inla(formula,
+    #              family = "gaussian",
+    #              data = data,
+    #              control.family = list(hyper = list(prec = list(initial = log(1), fixed=T))),
+    #              control.predictor = list(compute=T),
+    #              control.compute = list(config=T, waic = TRUE, dic = TRUE, cpo = TRUE),
+    #              control.inla = list(lincomb.derived.correlation.matrix=T),
+    #              scale = scaling,
+    #              quantiles = c(0.025, 0.1, 0.5, 0.9, 0.975))
+    # fitted_res <- mod1$summary.fitted.values
+    # latent_means <- fitted_res$`0.5quant`
+    # 
+    # # calculate bias results for direct estimates
+    # sim_results$univariate_iid[1, s, ] <- latent_means - mu_r
+    # sim_results$univariate_iid[2, s, ] <- abs(latent_means - mu_r)
+    # sim_results$univariate_iid[3, s, ] <- abs(latent_means - mu_r)/abs(mu_r)
+    # 
+    # # calculate coverage and width results
+    # sim_results$univariate_iid[4, s, ] <- (mu_r >= fitted_res$`0.1quant`) & (mu_r <= fitted_res$`0.9quant`)
+    # sim_results$univariate_iid[5, s, ] <- (mu_r >= fitted_res$`0.025quant`) & (mu_r <= fitted_res$`0.975quant`)
+    # sim_results$univariate_iid[6, s, ] <- (fitted_res$`0.9quant` - fitted_res$`0.1quant`)
+    # sim_results$univariate_iid[7, s, ] <- (fitted_res$`0.975quant` - fitted_res$`0.025quant`)
+}
+
+# compile results
+sim_results_region <- lapply(sim_results, function(x) {t(apply(x, c(1,3), mean))})
+sim_results_compiled <- lapply(sim_results_region, function(x) {apply(x, 2, mean)})
+
+# plot region-level results
+par(mfrow = c(ceiling(length(measures)/2), 2))
+for (i in 1:length(measures)) {
+    plot(sim_results_region$univariate_iid[, i] ~ sim_results_region$direct_estimates[, i],
+         pch = 19, col = rgb(0, 0, 0, alpha = 0.5), xlab = "direct estimates", ylab = "IID models",
+         main = measures[i])
+    abline(0, 1, col = "darkgreen")
+}
+```
+
+## Shared IID + ICAR latent mean model
+
+Now we will fit shared IID + ICAR models
+
+### Results
+
+```{r}
+# functions ####
+fitINLA <- function(formula, data, lincombs) {
+    inla(formula, data = data, 
+         family = "gaussian",
+         lincomb = lincombs,
+         control.family = list(hyper = list(prec = list(initial = 10, fixed=T))), 
+         control.predictor = list(compute=T),
+         control.compute = list(config=T, waic = TRUE, dic = TRUE, cpo = TRUE),
+         control.inla = list(lincomb.derived.correlation.matrix=T),
+         control.fixed = list(prec = list(default = 0.001), correlation.matrix=T))
+}
+
+# load raw data
+load(paste0(dropbox_dir, "/../../data/ken_dhs2014/data/haz-waz-kenDHS2014.rda"))
+n_regions <- length(unique(dat$admin1))
+
+# extract values from data
+n_r <- table(dat$admin1)
+d <- 1.5
+n_r_star <- n_r/(d^2)
+# load direct estimates
+direct_estimates <- read_rds(paste0(dropbox_dir,"/../ken2014-hazwaz/ken2014-hazwaz-stage-1.rds"))
+V_r <- direct_estimates[["V.array"]]
+
+# load 2014 KDHS HAZ/WAZ modeling results
+inla_results <- readRDS(paste0(dropbox_dir, "/../ken2014-hazwaz/ken2014-hazwaz-stage-2-inla-all.rds"))
+
+# extract parameters from model for sim
+beta <- inla_results[["Bivariate shared BYM"]]$summary.fixed$`0.5quant`
+sigma <- (inla_results[["Bivariate shared BYM"]]$summary.hyperpar[c("Precision for admin1.haz", "Precision for admin1.waz"), "0.5quant"])^{-1/2}
+rho <- (inla_results[["Bivariate shared BYM"]]$summary.hyperpar[c("Phi for admin1.haz", "Phi for admin1.waz"), "0.5quant"])
+lambda <- inla_results[["Bivariate shared BYM"]]$summary.hyperpar[c("Beta for admin1.haz.2"), "0.5quant"]
+
+# simulate a single set of random effects
+set.seed(80085)
+v_1 <- rnorm(n_regions, 0, 1)
+v_2 <- rnorm(n_regions, 0, 1)
+
+Q <- admin1.mat * -1
+diag(Q) <- 0
+diag(Q) <- -1 * apply(Q, 2, sum)
+
+sim.Q <- function(Q){
+    eigenQ <- eigen(Q)
+    rankQ <- qr(Q)$rank
+    sim <- as.vector(eigenQ$vectors[,1:rankQ] %*% 
+                         matrix(
+                             stats::rnorm(rep(1, rankQ), rep(0, rankQ), 1/sqrt(eigenQ$values[1:rankQ])),
+                             ncol = 1))
+    sim
+}
+
+u_1 <- sim.Q(Q)
+u_2 <- sim.Q(Q) 
+
+## Convolved REs
+convolved_re_1 <- (sqrt(1 - rho[1]) * v_1) + (sqrt(rho[1] / scaling_factor) * u_1)
+convolved_re_2 <- (sqrt(1 - rho[2]) * v_2) + (sqrt(rho[2] / scaling_factor) * u_2)
+
+# calculate latent means
+mu_r_1 <- beta[1] + convolved_re_1 * sigma[1] + lambda * convolved_re_2 * sigma[2]
+mu_r_2 <- beta[2] + convolved_re_2 * sigma[2]
+mu_r <- cbind(mu_r_1, mu_r_2)
+
+# what measures do we want to calculate
+measures <- c("mean bias",
+              "mean absolute bias",
+              "mean relative bias",
+              "80% coverage",
+              "95% coverage",
+              "80% width",
+              "95% width")
+
+# start simulations
+set.seed(80085)
+n_sim <- 100
+sim_results <- list(direct_estimates = NA,
+                    univariate_iid = NA)
+for (i in 1:length(sim_results)) {
+    sim_results[[i]] <- array(NA, dim = c(length(measures), n_sim, n_regions*2))
+    # sim_results[[i]] <- tibble(bias = rep(NA, n_sim),
+    #                           abs_bias = rep(NA, n_sim),
+    #                           rel_abs_bias = rep(NA, n_sim),
+    #                           coverage_80 = rep(NA, n_sim),
+    #                           width_80 = rep(NA, n_sim),
+    #                           coverage_95 = rep(NA, n_sim),
+    #                           width_95 = rep(NA, n_sim))
+}
+
+for(s in 1:n_sim) {
+    
+    # simulate direct estimates
+    y_hat_r <- matrix(NA, nrow = n_regions, ncol = 2)
+    V_hat_r <- V_r
+    for (i in 1:n_regions) {
+        y_hat_r[i,] <- rmvnorm(1, mu_r[i,], V_r[i, , ])
+    
+        # simulate V_des
+        V_hat_r[i,,] <- rWishart(1, (n_r_star[i] - 1), V_r[i,,])/(n_r_star[i] - 1)
+    }
+    
+    # calculate bias results for direct estimates
+    sim_results$direct_estimates[1, s, ] <- as.vector(y_hat_r - mu_r)
+    sim_results$direct_estimates[2, s, ] <- abs(as.vector(y_hat_r) - as.vector(mu_r))
+    sim_results$direct_estimates[3, s, ] <- abs(as.vector(y_hat_r) - as.vector(mu_r))/abs(as.vector(mu_r))
+    
+    # calculate CIs
+    ci_80_direct <- t(rbind(as.vector(y_hat_r), as.vector(y_hat_r)) + t(t(c(-1, 1))) %*% t(qnorm(0.9)*sqrt(c(V_hat_r[, 1, 1], V_hat_r[, 2, 2]))))
+    ci_95_direct <- t(rbind(as.vector(y_hat_r), as.vector(y_hat_r)) + t(t(c(-1, 1))) %*% t(qnorm(0.975)*sqrt(c(V_hat_r[, 1, 1], V_hat_r[, 2, 2]))))
+    
+    # calculate coverage and width results
+    sim_results$direct_estimates[4, s, ] <- (as.vector(mu_r) >= ci_80_direct[,1]) & (as.vector(mu_r) <= ci_80_direct[,2])
+    sim_results$direct_estimates[5, s, ] <- (as.vector(mu_r) >= ci_95_direct[,1]) & (as.vector(mu_r) <= ci_95_direct[,2])
+    sim_results$direct_estimates[6, s, ] <- (ci_80_direct[,2] - ci_80_direct[,1])
+    sim_results$direct_estimates[7, s, ] <- (ci_95_direct[,2] - ci_95_direct[,1])
+    
+    # # prep for inla model
+    # data <- list(y = y_hat_r,
+    #              admin1 = 1:n_regions)
+    # formula <- as.formula("y ~ 1 + f(admin1, model = 'iid')")
+    # scaling <- 1/V_hat_r
+    # 
+    # # fit smoothing models
+    # mod1 <- inla(formula,
+    #              family = "gaussian",
+    #              data = data,
+    #              control.family = list(hyper = list(prec = list(initial = log(1), fixed=T))),
+    #              control.predictor = list(compute=T),
+    #              control.compute = list(config=T, waic = TRUE, dic = TRUE, cpo = TRUE),
+    #              control.inla = list(lincomb.derived.correlation.matrix=T),
+    #              scale = scaling,
+    #              quantiles = c(0.025, 0.1, 0.5, 0.9, 0.975))
+    # fitted_res <- mod1$summary.fitted.values
+    # latent_means <- fitted_res$`0.5quant`
+    # 
+    # # calculate bias results for direct estimates
+    # sim_results$univariate_iid[1, s, ] <- latent_means - mu_r
+    # sim_results$univariate_iid[2, s, ] <- abs(latent_means - mu_r)
+    # sim_results$univariate_iid[3, s, ] <- abs(latent_means - mu_r)/abs(mu_r)
+    # 
+    # # calculate coverage and width results
+    # sim_results$univariate_iid[4, s, ] <- (mu_r >= fitted_res$`0.1quant`) & (mu_r <= fitted_res$`0.9quant`)
+    # sim_results$univariate_iid[5, s, ] <- (mu_r >= fitted_res$`0.025quant`) & (mu_r <= fitted_res$`0.975quant`)
+    # sim_results$univariate_iid[6, s, ] <- (fitted_res$`0.9quant` - fitted_res$`0.1quant`)
+    # sim_results$univariate_iid[7, s, ] <- (fitted_res$`0.975quant` - fitted_res$`0.025quant`)
+}
+
+# compile results
+sim_results_region <- lapply(sim_results, function(x) {t(apply(x, c(1,3), mean))})
+sim_results_compiled <- lapply(sim_results_region, function(x) {apply(x, 2, mean)})
+
+# plot region-level results
+par(mfrow = c(ceiling(length(measures)/2), 2))
+for (i in 1:length(measures)) {
+    plot(sim_results_region$univariate_iid[, i] ~ sim_results_region$direct_estimates[, i],
+         pch = 19, col = rgb(0, 0, 0, alpha = 0.5), xlab = "direct estimates", ylab = "IID models",
+         main = measures[i])
+    abline(0, 1, col = "darkgreen")
+}
+```
 
 <!-- ### Data generating mechanism -->
 
@@ -378,3 +819,4 @@ In each simulation, we will have the same values of $\mu_r$ and $V_r$, and we us
 <!-- These random effects will only be simulated once and the same ones will be used across all simulations -->
 
 <!-- Once we have these $\mu_{rc}$ values, we will simulate the  -->
+
