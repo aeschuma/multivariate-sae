@@ -73,7 +73,7 @@ for (a in dgm_to_run) {
         } else {
             script <- "qsub-stage-2-sims.sh" 
         }
-        sub <- paste0("qsub -v ",
+        sub <- paste0("qsub -l h=\"biostat-b34|biostat-b35|biostat-b36|biostat-b37\" -v ",
                       "a=",a,
                       ",rr=",run_number,
                       ",s=",s,
