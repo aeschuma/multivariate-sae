@@ -71,12 +71,12 @@ for (rn in 1:length(run_numbers)) {
         
         # save results
         setwd(savedir)
-        save(results_comp, diags_comp, file = paste0("results-diags_run-", run_number,".Rdata"))
+        save(results_comp, file = paste0("results_run-", run_number,".Rdata"))
         
         # move results to the real dropbox if on Box
         if (root == "P:/") {
             setwd("C:/Users/aeschuma/Dropbox/dissertation_2/survey-csmf/results/stage-2-simulation")
-            save(results_comp, diags_comp, file = paste0("results-diags_run-", run_number,".Rdata"))
+            save(results_comp, file = paste0("results_run-", run_number,".Rdata"))
         } 
     }
 }
@@ -86,7 +86,7 @@ if (!testing) {
     if (root == "P:/") {
         # delete tmp files
         setwd(paste0(savedir,"/tmp"))
-        sapply(c(resfiles, diagfiles), unlink)
+        sapply(c(resfiles), unlink)
         setwd(paste0(savedir,"/../../out/stage-2-simulation"))
         sapply(list.files(), unlink)
         
@@ -98,10 +98,8 @@ if (!testing) {
         
         # delete tmp files
         tmp_del_res <- paste0(savedir,"/tmp/results*")
-        tmp_del_stan <- paste0(savedir,"/tmp/standiags*")
         system(paste0("rm -f ", tmp_del_res))
-        system(paste0("rm -f ", tmp_del_stan))
-        
+
         # delete .pe and .po files
         system("rm -f /home/users/aeschuma/s2sim_*")
     }
