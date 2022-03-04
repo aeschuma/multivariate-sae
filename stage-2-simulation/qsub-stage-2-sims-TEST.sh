@@ -11,7 +11,7 @@ cd ~/Dropbox/dissertation_2/survey-csmf/out/stage-2-simulation
 # set local variables
 
 # execute command(s)
-Rscript --no-save --no-restore --verbose /home/users/aeschuma/Desktop/survey-csmf/stage-2-simulation/inla-cluster-test.R $a $rr $s > stage-2-sim-parallel-TEST_$t.Rout 2>&1
+Rscript --no-save --no-restore --verbose /home/users/aeschuma/Desktop/survey-csmf/stage-2-simulation/inla-cluster-test.R $a $rr $s > inla-cluster-test_$t.Rout 2>&1
 
 # cp stage-2-sim-parallel-TEST_$t.Rout /home/users/aeschuma/Dropbox/dissertation_2/survey-csmf/out/stage-2-simulation
 # rm -f stage-2-sim-parallel-TEST_$t.Rout

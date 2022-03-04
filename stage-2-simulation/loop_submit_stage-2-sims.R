@@ -28,7 +28,7 @@ if (root == "P:/") {
 
 ## testing?
 testing_loop <- FALSE
-testing_script <- TRUE
+testing_script <- FALSE
 
 ## define directories
 
@@ -45,11 +45,11 @@ setwd(wd)
 #######################
 
 ## which dgm to run?
-# dgm_to_run <- c(1, 2)
-dgm_to_run <- c(6)
+dgm_to_run <- c(1, 2)
+# dgm_to_run <- c(1)
 
 ## Simulation number
-number_of_sims <- 2
+number_of_sims <- 100
 
 ## loop and submit jobs
 running_total <- 0

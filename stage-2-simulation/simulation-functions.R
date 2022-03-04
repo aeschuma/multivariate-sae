@@ -25,11 +25,12 @@ sim.Q <- function(Q){
 # output:
 #   datlist: list of data to be used as input to various STAN models
 #   params: values of parameters used in the simulation
-simulateData <- function(dgm_specs, Amat, scaling_factor, seed_re, seed_lik, testing = FALSE) {
+simulateData <- function(dgm_specs, n_r, Amat, scaling_factor, seed_re, seed_lik, testing = FALSE) {
     
     # testing
     if (testing == TRUE) {
         dgm_specs <- my_dgm
+        n_r <- table(dat$admin1)
         Amat <- admin1.mat
         scaling_factor <- scaling_factor
         seed_re <- 80085
@@ -45,25 +46,15 @@ simulateData <- function(dgm_specs, Amat, scaling_factor, seed_re, seed_lik, tes
     one_precise_one_not <- my_dgm["one_precise_one_not"]
     my_dgm <- my_dgm[!(names(my_dgm) == "one_precise_one_not")]
     
-    # load models to pull from 
-    numeric_pars <- suppressWarnings(as.numeric(my_dgm))
-    if (any(is.na(numeric_pars))) {
-        models_to_load <- unique(my_dgm[is.na(numeric_pars)])
-        mod_lists <- vector(mode = "list", length = length(models_to_load))
-        names(mod_lists) <- models_to_load
-        for (i in 1:length(mod_lists)) {
-            # check par model is legit
-            if (!(models_to_load[i] %in% c("ken2014-hazwaz-stage-2-bivariate-shared-coreg-b11",
-                                           "ken2014-hazwaz-stage-2-bivariate-nonshared-b11",
-                                           "ken2014-hazwaz-stage-2-bivariate-shared-coreg-b33",
-                                           "ken2014-hazwaz-stage-2-bivariate-nonshared-b33"))) {
-                stop(paste0("Model ",models_to_load[i] ," not yet supported"))
-            }
-            
-            # load model
-            mod_lists[[i]] <- read_rds(paste0("~/Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/", models_to_load[i], ".rds"))
-        }
-    }
+    # load first stage model results
+    mod_lists <- list(readRDS("~/Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-hazwaz-stage-1.rds"))
+    names(mod_lists) <- "First stage"
+    
+    # load all 2nd stage model results
+    mod_lists_2 <- readRDS("~/Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-hazwaz-stage-2-inla-all.rds")
+    
+    # combine lists
+    mod_lists <- c(mod_lists, mod_lists_2)
     
     # set parameters
     all_par_names <- names(my_dgm)
@@ -72,7 +63,16 @@ simulateData <- function(dgm_specs, Amat, scaling_factor, seed_re, seed_lik, tes
     V_pars_numeric <- suppressWarnings(as.numeric(V_pars))
     if (length(unique(V_pars)) == 1 & sum(is.na(V_pars_numeric)) == length(V_pars_numeric)) { # if all parameters are from the same model
         this.V.mod <- unique(V_pars)
-        V.array <- mod_lists[[this.V.mod]]$data$Sigma
+        V.array <- mod_lists[[this.V.mod]]$V.array
+        num_corrs <- dim(V.array)[1]
+        my.corrs <- rep(NA, num_corrs)
+        for (j in 1:num_corrs) {
+            Vtmp <- V.array[j,,]
+            D <- diag(sqrt(diag(Vtmp)))
+            DInv <- solve(D)
+            corr.tmp <- DInv %*% Vtmp %*% DInv
+            my.corrs[j] <- corr.tmp[1,2]
+        }
     } else {
         # V correlation
         corr_pars <- V_pars[grepl("V_corr", names(V_pars))]
@@ -98,7 +98,7 @@ simulateData <- function(dgm_specs, Amat, scaling_factor, seed_re, seed_lik, tes
                 stop("If based on a model, correlation parameters must be from the SAME model")
             }
             corr_par <- unique(corr_pars)
-            V.array.tmp <- mod_lists[[corr_par]]$data$Sigma
+            V.array.tmp <- mod_lists[[corr_par]]$V.array
             num_corrs <- dim(V.array.tmp)[1]
             my.corrs <- rep(NA, num_corrs)
             for (j in 1:num_corrs) {
@@ -146,7 +146,7 @@ simulateData <- function(dgm_specs, Amat, scaling_factor, seed_re, seed_lik, tes
                 stop("If based on a model, V diagonal parameters must be from the SAME model")
             }
             vdiag_par <- unique(vdiag_pars)
-            V.array.tmp <- mod_lists[[vdiag_par]]$data$Sigma
+            V.array.tmp <- mod_lists[[vdiag_par]]$V.array
             num_vdiags <- dim(V.array.tmp)[1]
             my.diag.mat <- V.array.tmp
             for (jj in 1:num_vdiags) {
@@ -187,7 +187,21 @@ simulateData <- function(dgm_specs, Amat, scaling_factor, seed_re, seed_lik, tes
             if (mean_pars_names[i] == "lambda" & grepl("nonshared", par_mod.tmp)) {
                 mean_pars[i] <- 0
             } else {
-                mean_pars[i] <- summary(mod_lists[[par_mod.tmp]][["mod"]][[1]], par = mean_pars_names[i])$summary[,"50%"]
+                if (names(par_mod.tmp) == "beta[1]") {
+                    mean_pars[i] <- mod_lists[[par_mod.tmp]]$summary.fixed["outcomeHAZ", "0.5quant"]
+                } else if (names(par_mod.tmp) == "beta[2]") {
+                    mean_pars[i] <- mod_lists[[par_mod.tmp]]$summary.fixed["outcomeWAZ", "0.5quant"]
+                } else if (names(par_mod.tmp) == "sigma[1]") {
+                    mean_pars[i] <- mod_lists[[par_mod.tmp]]$summary.hyperpar["Precision for admin1.haz", "0.5quant"]^(-0.5)
+                } else if (names(par_mod.tmp) == "sigma[2]") {
+                    mean_pars[i] <- mod_lists[[par_mod.tmp]]$summary.hyperpar["Precision for admin1.waz", "0.5quant"]^(-0.5)
+                } else if (names(par_mod.tmp) == "rho[1]") {
+                    mean_pars[i] <- mod_lists[[par_mod.tmp]]$summary.hyperpar["Phi for admin1.haz", "0.5quant"]
+                } else if (names(par_mod.tmp) == "rho[2]") {
+                    mean_pars[i] <- mod_lists[[par_mod.tmp]]$summary.hyperpar["Phi for admin1.waz", "0.5quant"]
+                } else if (names(par_mod.tmp) == "lambda") {
+                    mean_pars[i] <- mod_lists[[par_mod.tmp]]$summary.hyperpar["Beta for admin1.haz.2", "0.5quant"]
+                } 
             }
         }
     }
@@ -227,37 +241,58 @@ simulateData <- function(dgm_specs, Amat, scaling_factor, seed_re, seed_lik, tes
     y <- matrix(NA, nrow = n_regions, ncol = 2)
     mu <- matrix(NA, nrow = n_regions, ncol = 2)
     for (i in 1:n_regions) {
-        mu[i, ] <- c(mean_pars["beta[1]"] + (convolved_re_1[i] * mean_pars["sigma[1]"]) + (mean_pars["lambda"] * u_2[i]), 
+        mu[i, ] <- c(mean_pars["beta[1]"] + (convolved_re_1[i] * mean_pars["sigma[1]"]) + (mean_pars["lambda"] * convolved_re_2[i]), 
                      mean_pars["beta[2]"] + (convolved_re_2[i] * mean_pars["sigma[2]"]))
         y[i, ] <- rmvnorm(1, mu[i, ], V.array[i,,])
     }
-        
-    datlist <- list(R = n_regions,
-                    regions = 1:n_regions,
-                    Sigma = V.array,
-                    y = y,
-                    N_edges = node.info$n_edges,
-                    node1 = node.info$node1,
-                    node2 = node.info$node2,
-                    scaling_factor = scaling_factor,
-                    rho_beta_1 = NA,
-                    rho_beta_2 = NA,
-                    sigma_normal_sd = NA)
     
-    RE_list <- list(u_1 = u_1,
-                    u_2 = u_2,
-                    v_1 = v_1,
-                    v_2 = v_2,
-                    convolved_re_1 = convolved_re_1,
-                    convolved_re_2 = convolved_re_2)
+    # simulate V_des
+    V_hat_array <- V.array
+    for (i in 1:n_regions) {
+        V_hat_array[i,,] <- rWishart(1, n_r[i]-1, V.array[i,,])/(n_r[i]-1)
+    }
+    num_corrs <- dim(V_hat_array)[1]
+    my.corrs_hat <- rep(NA, num_corrs)
+    for (j in 1:num_corrs) {
+        Vtmp <- V_hat_array[j,,]
+        D <- diag(sqrt(diag(Vtmp)))
+        DInv <- solve(D)
+        corr.tmp <- DInv %*% Vtmp %*% DInv
+        my.corrs_hat[j] <- corr.tmp[1,2]
+    }
+
+    ## reformat data into long form
+    results <- tibble(admin1 = 1:n_regions,
+                      meanHAZ.bi = y[, 1],
+                      meanWAZ.bi = y[, 2],
+                      seHAZ.bi = V_hat_array[,1,1],
+                      seWAZ.bi = V_hat_array[,2,2],
+                      corr.bi = my.corrs_hat)
+    results.long <- results %>% select(admin1,
+                                       meanHAZ.bi, meanWAZ.bi) %>%
+        pivot_longer(cols = c(meanHAZ.bi, meanWAZ.bi),
+                     names_to = "outcome",
+                     names_prefix = "mean",
+                     values_to = "value")
+    results.long$outcome <- ifelse(results.long$outcome == "HAZ.bi", "HAZ", "WAZ")
+    results.long$admin1.haz <- ifelse(results.long$outcome == "HAZ", results.long$admin1, NA)
+    results.long$admin1.waz <- ifelse(results.long$outcome == "WAZ", results.long$admin1, NA)
+    results.long$obs <- 1:nrow(results.long)
+    
+    # create a list of the data
+    data <- as.list(results.long)
+    data$weights <- rep(1, n_regions)
     
     params <- list(V_pars = V_pars,
+                   V.array = V.array,
                    mean_pars = mean_pars,
-                   REs = RE_list,
+                   REs = list(v_1, v_2, u_1, u_2, convolved_re_1, convolved_re_2),
                    bivariate_means = mu)
+    
     # output
-    output <- list(datlist = datlist,
-                   params = params)
+    output <- list(datlist = data,
+                   params = params,
+                   dattibble = results)
     
     # return the data
     return(output)
@@ -345,4 +380,259 @@ fitSTAN <- function(stan_file, data,
                    elapsed_time = stop.time[3] - start.time[3])
     cat(paste("Done! \n"))
     return(output)
+}
+
+fitAllINLAmodels <- function(simulated_data, testing = FALSE) {
+    
+    if (testing) {
+        simulated_data <- simulated_data
+    }
+    
+    data <- simulated_data$datlist
+    Nt <- length(unique(data$admin1))
+    N <- length(data$admin1)
+    n_regions <- Nt
+    
+    ## Define the index-vectors ii.1 ii.2 etc, which are the
+    ## index's for the iid2d-model at timepoint 1, 2, ...
+    for(j in 1:Nt) {
+        itmp <-  numeric(N)
+        itmp[] <-  NA
+        itmp[(j-1)*2 + 1] <-  1
+        itmp[(j-1)*2 + 2] <-  2
+        data <-  c(list(itmp), data)
+        names(data)[1] <-  paste("ii.", j, sep="")
+    }
+    
+    ## add another index for the shared component
+    data$admin1.haz.2 <- data$admin1.haz
+    
+    ## add indeces for iid components in besag + iid formulation
+    data$admin1.haz.iid <- data$admin1.haz
+    data$admin1.waz.iid <- data$admin1.waz
+    
+    # define model components ####
+    
+    ## priors ####
+    iid_prior <- list(prec = list(prior = "pc.prec",
+                                  param = c(1, 0.01)))
+    bym2_prior <- list(phi=list(prior="logitbeta", param=c(1, 1), initial=0.5), 
+                       prec=list(prior="pc.prec", param=c(1, 0.01), initial=5))
+    lambda_prior <- list(beta = list(prior = 'logtnormal', param = c(0, 1)))
+    besag_prior <- list(prec=list(prior="pc.prec", param=c(1, 0.01), initial=5))
+    
+    ## Diagonal V formula additions ####
+    
+    ### we now have to add one 'iid2d' model for each observation pair,
+    ### since their cov.matrix is different. we have to do this
+    ### automatically... here I add numbers directly for simplicity
+    
+    ### univariate
+    add.univariate <- ""
+    for(j in 1:Nt) {
+        init.prec.haz <-  log(simulated_data$dattibble$seHAZ.bi[j]^(-2))
+        init.prec.waz <-  log(simulated_data$dattibble$seWAZ.bi[j]^(-2))
+        
+        add.univariate <-  paste(add.univariate, paste(" + 
+                         f(", paste("ii.", j, sep=""), ", model=\"iid2d\", n=2,
+                         hyper = list(
+                         prec1 = list(
+                         initial =", init.prec.haz,", 
+                         fixed = TRUE),
+                         prec2 = list(
+                         initial =", init.prec.waz,", 
+                         fixed = TRUE),
+                         cor = list(
+                         initial = log((1+", 0, ")/(1-", 0, ")), 
+                         fixed = TRUE)))"))
+        
+    }
+    
+    ### bivariate
+    add.bivariate <- ""
+    for(j in 1:Nt) {
+        corr <-  simulated_data$dattibble$corr.bi[j]
+        init.prec.haz <-  log(simulated_data$dattibble$seHAZ.bi[j]^(-2))
+        init.prec.waz <-  log(simulated_data$dattibble$seWAZ.bi[j]^(-2))
+        
+        add.bivariate <-  paste(add.bivariate, paste(" + 
+                         f(", paste("ii.", j, sep=""), ", model=\"iid2d\", n=2,
+                         hyper = list(
+                         prec1 = list(
+                         initial =", init.prec.haz,", 
+                         fixed = TRUE),
+                         prec2 = list(
+                         initial =", init.prec.waz,", 
+                         fixed = TRUE),
+                         cor = list(
+                         initial = log((1+", corr, ")/(1-", corr, ")), 
+                         fixed = TRUE)))"))
+        
+    }
+    
+    ## Model formulas ####
+    formula.univariate.iid <-  formula(paste("value ~ -1 + outcome + 
+                                          f(admin1.haz, model = 'iid', hyper = iid_prior) + 
+                                          f(admin1.waz, model = 'iid', hyper = iid_prior)",
+                                             paste(add.univariate, collapse = " ")))
+    formula.univariate.bym <- formula(paste("value ~ -1 + outcome + 
+                                         f(admin1.haz, model = 'bym2',
+                                           graph = admin1.mat, 
+                                           scale.model = T, 
+                                           constr = T,
+                                           hyper = bym2_prior) +
+                                         f(admin1.waz, model = 'bym2',
+                                           graph = admin1.mat, 
+                                           scale.model = T, 
+                                           constr = T,
+                                           hyper = bym2_prior)",
+                                            paste(add.univariate, collapse = " ")))
+    formula.bivariate.nonshared.iid <-  formula(paste("value ~ -1 + outcome + 
+                                                   f(admin1.haz, model = 'iid', hyper = iid_prior) + 
+                                                   f(admin1.waz, model = 'iid', hyper = iid_prior)",
+                                                      paste(add.bivariate, collapse = " ")))
+    formula.bivariate.nonshared.bym <-  formula(paste("value ~ -1 + outcome + 
+                                                   f(admin1.haz, model = 'bym2',
+                                                     graph = admin1.mat, 
+                                                     scale.model = T, 
+                                                     constr = T,
+                                                     hyper = bym2_prior) +
+                                                   f(admin1.waz, model = 'bym2',
+                                                     graph = admin1.mat, 
+                                                     scale.model = T, 
+                                                     constr = T,
+                                                     hyper = bym2_prior)",
+                                                      paste(add.bivariate, collapse = " ")))
+    formula.bivariate.shared.iid <-  formula(paste("value ~ -1 + outcome + 
+                                                   f(admin1.haz, model = 'iid', hyper = iid_prior) + 
+                                                   f(admin1.waz, model = 'iid', hyper = iid_prior) +
+                                                   f(admin1.haz.2, copy = \"admin1.waz\", 
+                                                     fixed = FALSE, hyper = lambda_prior)",
+                                                   paste(add.bivariate, collapse = " ")))
+    formula.bivariate.shared.bym <-  formula(paste("value ~ -1 + outcome + 
+                                                f(admin1.haz, model = 'bym2',
+                                                  graph = admin1.mat, 
+                                                  scale.model = T, 
+                                                  constr = T,
+                                                  hyper = bym2_prior) +
+                                                f(admin1.waz, model = 'bym2',
+                                                  graph = admin1.mat, 
+                                                  scale.model = T, 
+                                                  constr = T,
+                                                  hyper = bym2_prior) +
+                                                f(admin1.haz.2, copy = \"admin1.waz\", 
+                                                  fixed = FALSE, hyper = lambda_prior)",
+                                                   paste(add.bivariate, collapse = " ")))
+    formula.bivariate.shared.bym.alt <-  formula(paste("value ~ -1 + outcome + 
+                                                   f(admin1.haz, model = 'besag',
+                                                     graph = admin1.mat, 
+                                                     scale.model = T, 
+                                                     constr = T,
+                                                     hyper = besag_prior) +
+                                                   f(admin1.haz.iid, model = 'iid', hyper = iid_prior) +
+                                                   f(admin1.waz, model = 'besag',
+                                                     graph = admin1.mat, 
+                                                     scale.model = T, 
+                                                     constr = T,
+                                                     hyper = besag_prior) +
+                                                   f(admin1.waz.iid, model = 'iid', hyper = iid_prior) +
+                                                   f(admin1.haz.2, copy = \"admin1.waz\", 
+                                                     fixed = FALSE, hyper = lambda_prior)",
+                                                       paste(add.bivariate, collapse = " ")))
+    
+    ## linear combinations ####
+    
+    # linear combination of preds without 2x2 REs
+    lc.vec.fe <- c(rep(1, n_regions))
+    
+    diag.na.mat <- matrix(NA, nrow = n_regions, ncol = n_regions)
+    diag(diag.na.mat) <- 1
+    lc.vec.admin1.re <- diag.na.mat
+    
+    ## WAZ
+    lc.all.waz <- inla.make.lincombs(outcomeWAZ = lc.vec.fe, 
+                                     admin1.waz = lc.vec.admin1.re)
+    names(lc.all.waz) <- gsub("lc", "waz.reg.", names(lc.all.waz))
+    
+    ## WAZ if besag + iid
+    lc.all.waz.alt <- inla.make.lincombs(outcomeWAZ = lc.vec.fe, 
+                                         admin1.waz = lc.vec.admin1.re,
+                                         admin1.waz.iid = lc.vec.admin1.re)
+    names(lc.all.waz.alt) <- gsub("lc", "waz.reg.", names(lc.all.waz.alt))
+    
+    ## HAZ nonshared
+    lc.all.haz.nonshared <- inla.make.lincombs(outcomeHAZ = lc.vec.fe, 
+                                               admin1.haz = lc.vec.admin1.re)
+    names(lc.all.haz.nonshared) <- gsub("lc", "haz.reg.", names(lc.all.haz.nonshared))
+    
+    ## HAZ shared
+    lc.all.haz.shared <- inla.make.lincombs(outcomeHAZ = lc.vec.fe, 
+                                            admin1.haz = lc.vec.admin1.re,
+                                            admin1.haz.2 = lc.vec.admin1.re)
+    names(lc.all.haz.shared) <- gsub("lc", "haz.reg.", names(lc.all.haz.shared))
+    
+    ## HAZ shared if besag + iid
+    lc.all.haz.shared.alt <- inla.make.lincombs(outcomeHAZ = lc.vec.fe, 
+                                                admin1.haz = lc.vec.admin1.re,
+                                                admin1.haz.iid = lc.vec.admin1.re,
+                                                admin1.haz.2 = lc.vec.admin1.re)
+    names(lc.all.haz.shared.alt) <- gsub("lc", "haz.reg.", names(lc.all.haz.shared.alt))
+    
+    # Fit models ####
+    fitINLA <- function(formula, data, lincombs) {
+        inla(formula, data = data, 
+             family = "gaussian",
+             lincomb = lincombs,
+             control.family = list(hyper = list(prec = list(initial = 10, fixed=T))), 
+             control.predictor = list(compute=T),
+             control.compute = list(config=T, waic = TRUE, dic = TRUE, cpo = TRUE),
+             control.inla = list(lincomb.derived.correlation.matrix=T),
+             control.fixed = list(prec = list(default = 0.001), correlation.matrix=T),
+             quantiles=c(0.025, 0.1, 0.5, 0.9, 0.975))
+    }
+    
+    cat(paste("Univariate IID \n"))
+    mod.univariate.iid <- fitINLA(formula = formula.univariate.iid, 
+                                  data = data, 
+                                  lincombs = c(lc.all.haz.nonshared, lc.all.waz) )
+    
+    cat(paste("Univariate BYM \n"))
+    mod.univariate.bym <- fitINLA(formula = formula.univariate.bym, 
+                                  data = data, 
+                                  lincombs = c(lc.all.haz.nonshared, lc.all.waz))
+    
+    cat(paste("Bivariate nonshared IID \n"))
+    mod.bivariate.nonshared.iid <- fitINLA(formula = formula.bivariate.nonshared.iid, 
+                                           data = data, 
+                                           lincombs = c(lc.all.haz.nonshared, lc.all.waz))
+    
+    cat(paste("Bivariate nonshared BYM \n"))
+    mod.bivariate.nonshared.bym <- fitINLA(formula = formula.bivariate.nonshared.bym, 
+                                           data = data, 
+                                           lincombs = c(lc.all.haz.nonshared, lc.all.waz))
+    
+    cat(paste("Bivariate shared IID \n"))
+    mod.bivariate.shared.iid <- fitINLA(formula = formula.bivariate.shared.iid, 
+                                        data = data, 
+                                        lincombs = c(lc.all.haz.shared, lc.all.waz))
+    
+    cat(paste("Bivariate shared BYM \n"))
+    mod.bivariate.shared.bym <- fitINLA(formula = formula.bivariate.shared.bym, 
+                                        data = data, 
+                                        lincombs = c(lc.all.haz.shared, lc.all.waz))
+
+    inla.results <- list(mod.univariate.iid,
+                         mod.univariate.bym,
+                         mod.bivariate.nonshared.iid,
+                         mod.bivariate.nonshared.bym,
+                         mod.bivariate.shared.iid,
+                         mod.bivariate.shared.bym)
+    names(inla.results) <- c("Univariate IID",
+                             "Univariate BYM",
+                             "Bivariate nonshared IID", 
+                             "Bivariate nonshared BYM",
+                             "Bivariate shared IID", 
+                             "Bivariate shared BYM")
+    
+    return(inla.results)
 }

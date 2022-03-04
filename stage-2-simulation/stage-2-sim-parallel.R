@@ -22,19 +22,9 @@ if (root == "P:/") {
 }
 
 ## load libraries
-if (root == "/home/users/aeschuma/") {
-    library(Rcpp,lib.loc=paste0(root,"R/x86_64-pc-linux-gnu-library/3.6"));
-    library(StanHeaders,lib.loc=paste0(root,"R/x86_64-pc-linux-gnu-library/3.6")); 
-    library(BH,lib.loc = paste0(root,"R/x86_64-pc-linux-gnu-library/3.6"))
-    library(rstan,lib.loc = paste0(root,"R/x86_64-pc-linux-gnu-library/3.6"));
-} else {
-    library(Rcpp); library(StanHeaders); library(BH); library(rstan); library(bayesplot); 
-}
 library(mvtnorm); library(MASS);library(gtools); library(parallel);
 library(scales); library(RColorBrewer); library(ggplot2); library(tidyr); library(dplyr);
 library(haven); library(knitr); library(INLA); library(readr);
-
-if (root == "~/") library(cmdstanr);
 
 ## TESTING THE CODE?
 testing <- FALSE
@@ -43,6 +33,9 @@ testing <- FALSE
 
 # working directory for code
 wd <- paste0(root,"Desktop/survey-csmf/stage-2-simulation")
+
+# directory of the model results to load
+resultsdir <- paste0(root,"Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/")
 
 # directory to save results
 savedir <- paste0(root,"Dropbox/dissertation_2/survey-csmf/results/stage-2-simulation")
@@ -61,26 +54,12 @@ options(mc.cores = detectCores())
 cat(paste("load sim functions \n"))
 source("simulation-functions.R")
 
-# load model csv to load which model we're running
-cat(paste("load model info \n"))
-models_dat <- read_csv("model-info.csv")
-# only if need to rewrite csv to get rid of warning message for incomplete final line
-# write.csv(models_dat, file = "model-info.csv", row.names = FALSE)
 cat(paste("set parameters from command args \n"))
+
 # Set parameters! ####
 if (testing) {
-    ## which model to run
-    m_number <- 2
-    
     ## data generation options
-    dgm <- 15
-    
-    ## stan options
-    niter <- 5000
-    nchains <- 2
-    prop_warmup <- 0.5
-    max_treedepth <- 25
-    adapt_delta <- 0.8
+    dgm <- 1
     
     ## which run
     run_number <- 999
@@ -88,29 +67,17 @@ if (testing) {
     ## which simulation
     sim <- 499
 } else {
-    ## which model to run
-    m_number <- as.numeric(commandArgs(trailingOnly=TRUE)[1])
-
     ## data generation options
-    dgm <- as.numeric(commandArgs(trailingOnly=TRUE)[2])
-    
-    ## stan options
-    niter <- as.numeric(commandArgs(trailingOnly=TRUE)[3])
-    nchains <- as.numeric(commandArgs(trailingOnly=TRUE)[4])
-    prop_warmup <- as.numeric(commandArgs(trailingOnly=TRUE)[5])
-    max_treedepth <- as.numeric(commandArgs(trailingOnly=TRUE)[6])
-    adapt_delta <- as.numeric(commandArgs(trailingOnly=TRUE)[7])
+    dgm <- as.numeric(commandArgs(trailingOnly=TRUE)[1])
     
     ## which run
-    run_number <- as.numeric(commandArgs(trailingOnly=TRUE)[8])
+    run_number <- as.numeric(commandArgs(trailingOnly=TRUE)[2])
     
     ## which simulation
-    sim <- as.numeric(commandArgs(trailingOnly=TRUE)[9])
+    sim <- as.numeric(commandArgs(trailingOnly=TRUE)[3])
 }
 
 cat(paste("Set modeling info \n"))
-# set the model to run
-my_model <- models_dat %>% dplyr::filter(model_number == m_number) %>% dplyr::select(-1) %>% dplyr::slice(1) %>% unlist()
 
 # load data
 dgm_file <- read_csv("dgm-info.csv")
@@ -122,114 +89,135 @@ my_dgm <- my_dgm %>% dplyr::select(-geo_data, -random_re)
 cat(paste("Simulate data \n"))
 # Simulate data ####
 simulated_data <- simulateData(dgm_specs = my_dgm, 
+                               n_r = table(dat$admin1),
                                Amat = admin1.mat, 
                                scaling_factor = scaling_factor, 
                                seed_re = ifelse(random_re, sim + 500, 98125), 
                                seed_lik = sim,
                                testing = FALSE)
 
-# update with priors
-simulated_data$datlist$rho_beta_1 <- as.numeric(my_model["rho_beta_1"])
-simulated_data$datlist$rho_beta_2 <- as.numeric(my_model["rho_beta_2"])
-simulated_data$datlist$sigma_normal_sd <- as.numeric(my_model["sigma_normal_sd"])
-
-# Fit STAN model ####
-cat(paste("Fit stan model \n"))
-if (root == "~/") {
-    stan_list <- fitSTAN(stan_file = my_model["stan_model_file"], 
-                         data = simulated_data$datlist,
-                         niter = niter, nchains = nchains, nthin = 1, prop_warmup = prop_warmup,
-                         adapt_delta = adapt_delta, max_treedepth = max_treedepth, 
-                         cmd = TRUE)
-} else {
-    stan_list <- fitSTAN(stan_file = my_model["stan_model_file"], 
-                         data = simulated_data$datlist,
-                         niter = niter, nchains = nchains, nthin = 1, prop_warmup = prop_warmup,
-                         adapt_delta = adapt_delta, max_treedepth = max_treedepth, 
-                         cmd = FALSE)
-}
+# Fit INLA models ####
+cat(paste("Fit INLA models \n"))
+inla.results <- fitAllINLAmodels(simulated_data = simulated_data, testing = FALSE)
 
 # Calculate summary measures ####
-
-# save parameter names in order to extract and save results
-params_to_extract <- names(simulated_data$params[["mean_pars"]])
-if (!(my_model["stan_model_file"] %in% c("stan-models/shared-bym2-coregionalization.stan"))) {
-    params_to_extract <- params_to_extract[which(params_to_extract != "lambda")]
-}
-
 cat(paste("Extract summaries for parameters \n"))
 
+parnames <- c("beta[1]", "beta[2]", "sigma[1]", "sigma[2]", "rho[1]", "rho[2]", "lambda")
+
 # summaries
-mod_summary <- summary(stan_list$mod_stan,
-                       pars = params_to_extract,
-                       probs = c(0.025, 0.1, 0.5, 0.9, 0.975))
-posterior_qs <- mod_summary$summary[, c("2.5%", "10%", "50%", "90%", "97.5%")]
+mod_summary <- tibble(params = parnames,
+                      pct2.5 = NA,
+                      pct10 = NA,
+                      pct50 = NA,
+                      pct90 = NA,
+                      pct97.5 = NA)
+mod_summary <- rep(list(mod_summary), length(inla.results))
+latent_mean_summary <- vector(mode = "list", length = length(inla.results))
+for (i in 1:length(inla.results))  {
+    mod_summary[[i]][mod_summary[[i]]$params %in% c("beta[1]", "beta[2]"), c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- inla.results[[i]]$summary.fixed[, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]
+    hyperpar_names <- rownames(inla.results[[i]]$summary.hyperpar)
+    for(j in 1:length(hyperpar_names)) {
+        tmpname <- hyperpar_names[j]
+        if (tmpname == "Precision for admin1.haz") {
+            mod_summary[[i]][mod_summary[[i]]$params == "sigma[1]", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- rev(inla.results[[i]]$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]^(-0.5))
+        } else if (tmpname == "Precision for admin1.waz") {
+            mod_summary[[i]][mod_summary[[i]]$params == "sigma[2]", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- rev(inla.results[[i]]$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]^(-0.5))
+        } else if (tmpname == "Phi for admin1.haz") {
+            mod_summary[[i]][mod_summary[[i]]$params == "rho[1]", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- inla.results[[i]]$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]
+        } else if (tmpname == "Phi for admin1.waz") {
+            mod_summary[[i]][mod_summary[[i]]$params == "rho[2]", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- inla.results[[i]]$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]
+        } else if (grepl("Beta", tmpname)) {
+            mod_summary[[i]][mod_summary[[i]]$params == "lambda", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- inla.results[[i]]$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]
+        } 
+    }
+    latent_mean_summary[[i]] <- inla.results[[i]]$summary.lincomb.derived[, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]
+}
 
 cat(paste("Calculate results for parameters \n"))
+
 # compile results
-sim_res <- data.frame(param = rownames(posterior_qs),
+sim_res <- data.frame(param = c(parnames, "HAZ latent means", "WAZ latent means"),
+                      bias = NA,
                       absolute_bias = NA,
-                      relative_bias = NA,
+                      relative_absolute_bias = NA,
                       coverage.80 = NA,
                       width.80 = NA,
                       coverage.95 = NA,
                       width.95 = NA)
-for (i in 1:nrow(sim_res)) {
-    tmp_param_name <- rownames(posterior_qs)[i]
-    tmp_param <- simulated_data$params[["mean_pars"]][tmp_param_name]
-    
-    sim_res$absolute_bias[i] <- posterior_qs[tmp_param_name, "50%"] - tmp_param
-    sim_res$relative_bias[i] <- (posterior_qs[tmp_param_name, "50%"] - tmp_param)/tmp_param
-    sim_res$coverage.80[i] <- (tmp_param > posterior_qs[tmp_param_name, "10%"]) & (tmp_param < posterior_qs[tmp_param_name, "90%"])
-    sim_res$width.80[i] <- posterior_qs[tmp_param_name, "90%"] - posterior_qs[tmp_param_name, "10%"]
-    sim_res$coverage.95[i] <- (tmp_param > posterior_qs[tmp_param_name, "2.5%"]) & (tmp_param < posterior_qs[tmp_param_name, "97.5%"])
-    sim_res$width.95[i] <- posterior_qs[tmp_param_name, "97.5%"] - posterior_qs[tmp_param_name, "2.5%"]
+sim_res <- rep(list(sim_res), length(inla.results))
+
+for (i in 1:length(sim_res)) {
+    for (j in 1:nrow(sim_res[[i]])) {
+        tmp_param_name <- sim_res[[i]]$param[j]
+        if (grepl("latent means", tmp_param_name)) {
+            if (grepl("HAZ", tmp_param_name)) {
+                real_means <- simulated_data$params$bivariate_means[, 1]
+                restmp <- latent_mean_summary[[i]][grepl("haz", rownames(latent_mean_summary[[i]])),]
+            } else {
+                real_means <- simulated_data$params$bivariate_means[, 2]
+                restmp <- latent_mean_summary[[i]][grepl("waz", rownames(latent_mean_summary[[i]])),]
+            }    
+            sim_res[[i]]$bias[sim_res[[i]]$param == tmp_param_name] <- mean(restmp$`0.5quant` - real_means)
+            sim_res[[i]]$absolute_bias[sim_res[[i]]$param == tmp_param_name] <- mean(abs(restmp$`0.5quant` - real_means))
+            sim_res[[i]]$relative_absolute_bias[sim_res[[i]]$param == tmp_param_name] <- mean(abs(restmp$`0.5quant` - real_means)/abs(real_means))
+            sim_res[[i]]$coverage.80[sim_res[[i]]$param == tmp_param_name] <- mean((real_means > restmp$`0.1quant`) & (real_means < restmp$`0.9quant`))
+            sim_res[[i]]$width.80[sim_res[[i]]$param == tmp_param_name] <- mean(restmp$`0.9quant` - restmp$`0.1quant`)
+            sim_res[[i]]$coverage.95[sim_res[[i]]$param == tmp_param_name] <- mean((real_means > restmp$`0.025quant`) & (real_means < restmp$`0.975quant`))
+            sim_res[[i]]$width.95[sim_res[[i]]$param == tmp_param_name] <- mean(restmp$`0.975quant` - restmp$`0.025quant`)
+        } else {
+            tmp_param <- simulated_data$params[["mean_pars"]][tmp_param_name]
+            idx <- mod_summary[[i]]$params == tmp_param_name
+            
+            sim_res[[i]]$bias[sim_res[[i]]$param == tmp_param_name] <- mod_summary[[i]]$pct50[idx] - tmp_param
+            sim_res[[i]]$absolute_bias[sim_res[[i]]$param == tmp_param_name] <- abs(mod_summary[[i]]$pct50[idx] - tmp_param)
+            sim_res[[i]]$relative_absolute_bias[sim_res[[i]]$param == tmp_param_name] <- abs(mod_summary[[i]]$pct50[idx] - tmp_param)/abs(tmp_param)
+            sim_res[[i]]$coverage.80[sim_res[[i]]$param == tmp_param_name] <- (tmp_param > mod_summary[[i]]$pct10[idx]) & (tmp_param < mod_summary[[i]]$pct90[idx])
+            sim_res[[i]]$width.80[sim_res[[i]]$param == tmp_param_name] <- mod_summary[[i]]$pct90[idx] - mod_summary[[i]]$pct10[idx]
+            sim_res[[i]]$coverage.95[sim_res[[i]]$param == tmp_param_name] <- (tmp_param > mod_summary[[i]]$pct2.5[idx]) & (tmp_param < mod_summary[[i]]$pct97.5[idx])
+            sim_res[[i]]$width.95[sim_res[[i]]$param == tmp_param_name] <- mod_summary[[i]]$pct97.5[idx] - mod_summary[[i]]$pct2.5[idx]
+        }
+    }
 }
 
-cat(paste("Extract mean preds \n"))
-# posterior observation means
-mod_pred_summary <- summary(stan_list$mod_stan,
-                            pars = "preds",
-                            probs = c(0.025, 0.1, 0.5, 0.9, 0.975))$summary[, c("2.5%", "10%", "50%", "90%", "97.5%")]
+# Direct estimates ####
+direst <- data.frame(param = c("HAZ latent means", "WAZ latent means"),
+                     bias = NA,
+                     absolute_bias = NA,
+                     relative_absolute_bias = NA,
+                     coverage.80 = NA,
+                     width.80 = NA,
+                     coverage.95 = NA,
+                     width.95 = NA)
+for (j in 1:nrow(direst)) {
+    tmp_param_name <- direst$param[j]
+    if (grepl("HAZ", tmp_param_name)) {
+        real_means <- simulated_data$params$bivariate_means[, 1]
+        des <- simulated_data$datlist$value[simulated_data$datlist$outcome ==  "HAZ"]
+        ci_80_direct <- t(rbind(des, des) + t(t(c(-1, 1))) %*% t(qnorm(0.9)*simulated_data$dattibble$seHAZ.bi))
+        ci_95_direct <- t(rbind(des, des) + t(t(c(-1, 1))) %*% t(qnorm(0.975)*simulated_data$dattibble$seHAZ.bi))
+    } else {
+        real_means <- simulated_data$params$bivariate_means[, 2]
+        des <- simulated_data$datlist$value[simulated_data$datlist$outcome ==  "WAZ"]
+        ci_80_direct <- t(rbind(des, des) + t(t(c(-1, 1))) %*% t(qnorm(0.9)*simulated_data$dattibble$seWAZ.bi))
+        ci_95_direct <- t(rbind(des, des) + t(t(c(-1, 1))) %*% t(qnorm(0.975)*simulated_data$dattibble$seWAZ.bi))
+    }    
+    restmp <- tibble(`0.025quant` = ci_95_direct[,1],
+                     `0.1quant` = ci_80_direct[,1],
+                     `0.5quant` = des,
+                     `0.9quant` = ci_80_direct[,2],
+                     `0.975quant` = ci_95_direct[,2])
+    
+    direst$bias[direst$param == tmp_param_name] <- mean(restmp$`0.5quant` - real_means)
+    direst$absolute_bias[direst$param == tmp_param_name] <- mean(abs(restmp$`0.5quant` - real_means))
+    direst$relative_absolute_bias[direst$param == tmp_param_name] <- mean(abs(restmp$`0.5quant` - real_means)/abs(real_means))
+    direst$coverage.80[direst$param == tmp_param_name] <- mean((real_means > restmp$`0.1quant`) & (real_means < restmp$`0.9quant`))
+    direst$width.80[direst$param == tmp_param_name] <- mean(restmp$`0.9quant` - restmp$`0.1quant`)
+    direst$coverage.95[direst$param == tmp_param_name] <- mean((real_means > restmp$`0.025quant`) & (real_means < restmp$`0.975quant`))
+    direst$width.95[direst$param == tmp_param_name] <- mean(restmp$`0.975quant` - restmp$`0.025quant`)
+}
 
-cat(paste("Calculate results for mean preds \n"))
-
-mod_pred_50 <- matrix(mod_pred_summary[, "50%"], ncol = 2, byrow = TRUE)
-mod_pred_10 <- matrix(mod_pred_summary[, "10%"], ncol = 2, byrow = TRUE)
-mod_pred_90 <- matrix(mod_pred_summary[, "90%"], ncol = 2, byrow = TRUE)
-mod_pred_025 <- matrix(mod_pred_summary[, "2.5%"], ncol = 2, byrow = TRUE)
-mod_pred_975 <- matrix(mod_pred_summary[, "97.5%"], ncol = 2, byrow = TRUE)
-
-real_means <- simulated_data$params$bivariate_means
-
-absolute_bias_pred <- mean(mod_pred_50 - real_means)
-rel_bias_pred <- mean((mod_pred_50 - real_means) / real_means)
-
-cov80_pred <- mean( (real_means >= mod_pred_10) & (real_means <= mod_pred_90) )
-cov95_pred <- mean( (real_means >= mod_pred_025) & (real_means <= mod_pred_975) )
-
-width80_pred <- mean(mod_pred_90 - mod_pred_10)
-width95_pred <- mean(mod_pred_975 - mod_pred_025)
-
-mean_pred_res <- data.frame(param = "mean_preds",
-                            absolute_bias = absolute_bias_pred,
-                            relative_bias = rel_bias_pred,
-                            coverage.80 = cov80_pred,
-                            width.80 = width80_pred,
-                            coverage.95 = cov95_pred,
-                            width.95 = width95_pred)
-
-cat(paste("Create results output \n"))
-
-# add onto results
-sim_res <- rbind(sim_res, mean_pred_res)
-
-cat(paste("Calculate stan diagnostics \n"))
-
-# stan diagnostics
-stan_diags <- data.frame(pct_divergent = get_num_divergent(stan_list$mod_stan)/(niter * nchains * prop_warmup),
-                         pct_max_tree_exceeded = get_num_max_treedepth(stan_list$mod_stan)/(niter * nchains * prop_warmup),
-                         pct_bmfi_low_chains = sum(is.finite(get_low_bfmi_chains(stan_list$mod_stan)))/nchains)
+sim_res <- c(list(direst), sim_res)
 
 # Save results ####
 cat(paste("Save results \n"))
@@ -237,22 +225,4 @@ if (!testing) {
     # save results
     setwd(savedir)
     saveRDS(sim_res, paste0("tmp/results_run-", run_number, "_sim-", sim, ".rds"))
-    saveRDS(stan_diags, paste0("tmp/standiags_run-", run_number, "_sim-", sim, ".rds"))
-}
-
-# Make plots if testing ####
-if (testing) {
-    
-    # make diagnostic plots
-    # stan_trace(stan_list$mod_stan, pars = params_to_extract)
-    # pairs(stan_list$mod_stan, pars = params_to_extract)
-    # mcmc_areas(as.matrix(stan_list$mod_stan),
-    #            pars = c("beta[1]", "beta[2]", 
-    #                     "sigma_gamma[1]", "sigma_gamma[2]",
-    #                     "lambda", "sigma_delta"),
-    #            prob = 0.8)
-    # mcmc_nuts_energy(nuts_params(stan_list$mod_stan))
-    
-    # plot REs (estimated vs. truth)
-    
 }
