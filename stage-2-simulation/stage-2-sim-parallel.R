@@ -14,7 +14,7 @@ library(scales); library(RColorBrewer); library(ggplot2); library(tidyverse); li
 library(haven); library(knitr); library(INLA); library(readr);
 
 ## TESTING THE CODE?
-testing <- FALSE
+testing <- TRUE
 
 ## define directories
 
@@ -46,7 +46,7 @@ cat(paste("set parameters from command args \n"))
 # Set parameters! ####
 if (testing) {
     ## data generation options
-    dgm <- 1
+    dgm <- 8
     
     ## which run
     run_number <- 999
@@ -79,7 +79,7 @@ simulated_data <- simulateData(dgm_specs = my_dgm,
                                n_r = table(dat$admin1)/(1.5^2),
                                Amat = admin1.mat, 
                                scaling_factor = scaling_factor, 
-                               seed_re = ifelse(random_re, sim + 500, 981250), 
+                               seed_re = ifelse(random_re, sim + 500*run_number, 98125+run_number), 
                                seed_lik = sim,
                                testing = FALSE)
 
