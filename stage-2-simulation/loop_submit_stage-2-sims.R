@@ -45,11 +45,11 @@ setwd(wd)
 #######################
 
 ## which dgm to run?
-# dgm_to_run <- c(1, 7, 8, 9, 10)
-dgm_to_run <- c(1)
+dgm_to_run <- c(1, 7, 8, 9, 10)
+# dgm_to_run <- c(1)
 
 ## Simulation number
-number_of_sims <- 1
+number_of_sims <- 1000
 
 ## loop and submit jobs
 running_total <- 0
@@ -73,7 +73,7 @@ for (a in dgm_to_run) {
         } else {
             script <- "qsub-stage-2-sims.sh" 
         }
-        sub <- paste0("qsub -l h=\"biostat-b34|biostat-b35|biostat-b36|biostat-b37\" -v ",
+        sub <- paste0("qsub -l h=\"biostat-b34|biostat-b35|biostat-b36|biostat-b37\" -pe local 2 -v ",
                       "a=",a,
                       ",rr=",run_number,
                       ",s=",s,
