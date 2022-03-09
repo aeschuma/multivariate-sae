@@ -208,6 +208,15 @@ simulateData <- function(dgm_specs, n_r, Amat, scaling_factor, seed_re, seed_lik
     names(mean_pars) <- mean_pars_names
     
     # simulate data!
+    dgm_model <- dgm_specs %>% select(mean_pars_names) %>% unlist() %>% unique()
+    if(length(dgm_model) != 1) {
+        stop("only one model can be used to specify DGM parameters; note that the model specified for parameters determines the DGM")
+    }
+    
+    if (grepl("Univariate", dgm_model)) {
+        V.array[,1,2] <- 0
+        V.array[,2,1] <- 0
+    }
     
     # set seed for random effects
     set.seed(seed_re)
@@ -216,23 +225,25 @@ simulateData <- function(dgm_specs, n_r, Amat, scaling_factor, seed_re, seed_lik
     v_1 <- rnorm(n_regions, 0, 1)
     v_2 <- rnorm(n_regions, 0, 1)
     
-    ## ICAR 
-    if(ncol(Amat) != nrow(Amat)){
-        stop("Amat does not have the same number of rows and columns.")
+    if (grepl("BYM", dgm_model)) {
+        ## ICAR 
+        if(ncol(Amat) != nrow(Amat)){
+            stop("Amat does not have the same number of rows and columns.")
+        }
+        if(sum(Amat %in% c(0, 1)) < length(Amat)){
+            stop("Amat contains values other than 0 and 1.")
+        }
+        Q <- Amat * -1
+        diag(Q) <- 0
+        diag(Q) <- -1 * apply(Q, 2, sum)
+        
+        u_1 <- sim.Q(Q)
+        u_2 <- sim.Q(Q) 
+        
+        ## Convolved REs
+        convolved_re_1 <- (sqrt(1 - mean_pars["rho[1]"]) * v_1) + (sqrt(mean_pars["rho[1]"] / scaling_factor) * u_1)
+        convolved_re_2 <- (sqrt(1 - mean_pars["rho[2]"]) * v_2) + (sqrt(mean_pars["rho[2]"] / scaling_factor) * u_2)
     }
-    if(sum(Amat %in% c(0, 1)) < length(Amat)){
-        stop("Amat contains values other than 0 and 1.")
-    }
-    Q <- Amat * -1
-    diag(Q) <- 0
-    diag(Q) <- -1 * apply(Q, 2, sum)
-
-    u_1 <- sim.Q(Q)
-    u_2 <- sim.Q(Q) 
-    
-    ## Convolved REs
-    convolved_re_1 <- (sqrt(1 - mean_pars["rho[1]"]) * v_1) + (sqrt(mean_pars["rho[1]"] / scaling_factor) * u_1)
-    convolved_re_2 <- (sqrt(1 - mean_pars["rho[2]"]) * v_2) + (sqrt(mean_pars["rho[2]"] / scaling_factor) * u_2)
     
     # set seed for the likelihood
     set.seed(seed_lik)
@@ -241,8 +252,28 @@ simulateData <- function(dgm_specs, n_r, Amat, scaling_factor, seed_re, seed_lik
     y <- matrix(NA, nrow = n_regions, ncol = 2)
     mu <- matrix(NA, nrow = n_regions, ncol = 2)
     for (i in 1:n_regions) {
-        mu[i, ] <- c(mean_pars["beta[1]"] + (convolved_re_1[i] * mean_pars["sigma[1]"]) + (mean_pars["lambda"] * convolved_re_2[i] * mean_pars["sigma[2]"]), 
-                     mean_pars["beta[2]"] + (convolved_re_2[i] * mean_pars["sigma[2]"]))
+        if (dgm_model == "Bivariate shared BYM") {
+            mu[i, ] <- c(mean_pars["beta[1]"] + (convolved_re_1[i] * mean_pars["sigma[1]"]) + (mean_pars["lambda"] * convolved_re_2[i] * mean_pars["sigma[2]"]), 
+                         mean_pars["beta[2]"] + (convolved_re_2[i] * mean_pars["sigma[2]"]))
+        } else if (dgm_model == "Univariate IID") {
+            mu[i, ] <- c(mean_pars["beta[1]"] + (v_1[i] * mean_pars["sigma[1]"]), 
+                         mean_pars["beta[2]"] + (v_2[i] * mean_pars["sigma[2]"]))
+        } else if (dgm_model == "Univariate BYM") {
+            mu[i, ] <- c(mean_pars["beta[1]"] + (convolved_re_1[i] * mean_pars["sigma[1]"]), 
+                         mean_pars["beta[2]"] + (convolved_re_2[i] * mean_pars["sigma[2]"]))
+        } else if (dgm_model == "Bivariate nonshared IID") {
+            mu[i, ] <- c(mean_pars["beta[1]"] + (v_1[i] * mean_pars["sigma[1]"]), 
+                         mean_pars["beta[2]"] + (v_2[i] * mean_pars["sigma[2]"]))
+        } else if (dgm_model == "Bivariate nonshared BYM") {
+            mu[i, ] <- c(mean_pars["beta[1]"] + (convolved_re_1[i] * mean_pars["sigma[1]"]), 
+                         mean_pars["beta[2]"] + (convolved_re_2[i] * mean_pars["sigma[2]"]))
+        } else if (dgm_model == "Bivariate shared IID") {
+            mu[i, ] <- c(mean_pars["beta[1]"] + (v_1[i] * mean_pars["sigma[1]"]) + (mean_pars["lambda"] * v_2[i] * mean_pars["sigma[2]"]), 
+                         mean_pars["beta[2]"] + (v_2[i] * mean_pars["sigma[2]"]))
+        } else {
+            stop("The model used to set parameters not yet supported as a DGM")
+        }
+        
         y[i, ] <- rmvnorm(1, mu[i, ], V.array[i,,])
     }
     
@@ -283,10 +314,17 @@ simulateData <- function(dgm_specs, n_r, Amat, scaling_factor, seed_re, seed_lik
     data <- as.list(results.long)
     data$weights <- rep(1, n_regions)
     
+    if (grepl("BYM", dgm_model)) {
+        re_list <- list(v_1 = v_1, v_2 = v_2, u_1 = u_1, u_2 = u_2, convolved_re_1 = convolved_re_1, convolved_re_2 = convolved_re_2)
+    } else {
+        re_list <- list(v_1 = v_1, v_2 = v_2)
+    }
+    
+    mean_pars[is.na(mean_pars)] <- 0
     params <- list(V_pars = V_pars,
                    V.array = V.array,
                    mean_pars = mean_pars,
-                   REs = list(v_1, v_2, u_1, u_2, convolved_re_1, convolved_re_2),
+                   REs = re_list,
                    bivariate_means = mu)
     
     # output

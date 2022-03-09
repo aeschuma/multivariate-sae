@@ -45,7 +45,7 @@ setwd(wd)
 #######################
 
 ## which dgm to run?
-dgm_to_run <- c(1, 7, 8, 9, 10)
+dgm_to_run <- 2:6
 # dgm_to_run <- c(1)
 
 ## Simulation number

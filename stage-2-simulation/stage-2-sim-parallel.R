@@ -46,7 +46,7 @@ cat(paste("set parameters from command args \n"))
 # Set parameters! ####
 if (testing) {
     ## data generation options
-    dgm <- 2
+    dgm <- 6
     
     ## which run
     run_number <- 999
