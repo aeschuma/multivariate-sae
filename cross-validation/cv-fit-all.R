@@ -363,17 +363,33 @@ for (r in 1:n_regions) {
     totaltime <- endtime - starttime
 }
 
-# compile results and make plots
-ggplot(cv_res, aes(x = pit_haz)) +
+# save results
+write_rds(cv_res, file = "../../../Dropbox/dissertation_2/survey-csmf/results/cv/cv_results.rds")
+
+# format
+cv_res %<>% mutate(model_factor = factor(model, levels = model_names))
+
+# make summary tables and plots
+pit_haz_plot <- ggplot(cv_res, aes(x = pit_haz)) +
     geom_histogram() + 
-    facet_wrap(~ model) +
+    facet_wrap(~ model_factor, ncol = 2) +
     theme_light()
 
-ggplot(cv_res, aes(x = pit_waz)) +
+pit_waz_plot <- ggplot(cv_res, aes(x = pit_waz)) +
     geom_histogram() + 
-    facet_wrap(~ model) +
+    facet_wrap(~ model_factor, ncol = 2) +
     theme_light()
 
-cv_res %>% mutate(logcpo = log(cpo)) %>% 
-    group_by(model) %>% 
-    summarise(logCPO = -1 * sum(logcpo))
+ggarrange(plotlist = list(pit_haz_plot, pit_waz_plot), nrow = 1, labels = c("HAZ", "WAZ"))
+
+logCPOres <- cv_res %>% mutate(logcpo = log(cpo)) %>% 
+    group_by(model_factor) %>% 
+    summarise(logCPO_num = round(-1 * sum(logcpo), 2))
+
+logCPOres$logCPO <- ifelse(logCPOres$logCPO_num == min(logCPOres$logCPO_num), 
+                           paste0("\\textbf{", logCPOres$logCPO_num, "}"),
+                           as.character(logCPOres$logCPO_num))
+
+logCPOres %>% select(model_factor, logCPO) %>%
+    kable(format = "markdown", caption = "Bivariate $-\\sum\\log(CPO)$ for each model. Bold indicates the best performing model",
+          col.names = c("Model", "$-\\sum\\log(CPO)$"))
