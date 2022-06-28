@@ -49,7 +49,7 @@ cat(paste("set parameters from command args \n"))
 # Set parameters! ####
 if (testing) {
     ## data generation options
-    dgm <- 1
+    dgm <- 7
     
     ## which run
     run_number <- 1
@@ -177,7 +177,7 @@ tmp <- inla(formulas[[ model_names[1] ]], data = simulated_data$data,
 
 message(paste0("Posterior sampling ", model_names[1]))
 
-samp <- inla.posterior.sample(n = nsamps, result = tmp)
+samp <- inla.posterior.sample(n = nsamps, result = tmp, seed = sim + 1)
 
 # # Calculate summary measures ####
 # cat(paste("Extract summaries for parameters \n"))
