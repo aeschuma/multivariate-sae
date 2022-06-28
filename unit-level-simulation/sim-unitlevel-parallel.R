@@ -52,7 +52,7 @@ if (testing) {
     dgm <- 7
     
     ## which run
-    run_number <- 2
+    run_number <- 15
     
     ## which simulation
     sim <- 2
