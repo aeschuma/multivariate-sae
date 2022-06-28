@@ -223,8 +223,8 @@ fitAllINLAmodels <- function(simulated_data, nsamps, seed = 1, testing = FALSE) 
     
     if (testing) {
         simulated_data <- simulated_data
-        seed = 1
-        nsamps <- 10
+        seed <- 3
+        nsamps <- 100
     }
     
     message("format data and set up model")
