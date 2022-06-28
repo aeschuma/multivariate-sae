@@ -49,7 +49,7 @@ setwd(wd)
 dgm_to_run <- c(7)
 
 ## Simulation number
-number_of_sims <- 4
+number_of_sims <- 2
 
 ## loop and submit jobs
 running_total <- 0

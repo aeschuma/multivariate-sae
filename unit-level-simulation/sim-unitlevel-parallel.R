@@ -106,7 +106,7 @@ model_names <- c("IID nonshared", "BYM nonshared",
 #                                  nsamps = nsamps,
 #                                  testing = FALSE)
 
-message(paste0("Fitting ", model_names[i]))
+message(paste0("Fitting ", model_names[1]))
 
 # get number of regions
 n_regions <- length(unique(simulated_data$data$admin1))
@@ -175,7 +175,7 @@ tmp <- inla(formulas[[ model_names[1] ]], data = simulated_data$data,
             # control.fixed = list(prec = list(default = 0.001), correlation.matrix=T),
             control.compute = list(config=T, waic = F, dic = F, cpo = F))
 
-message(paste0("Posterior sampling ", model_names[i]))
+message(paste0("Posterior sampling ", model_names[1]))
 
 samp <- inla.posterior.sample(n = nsamps, result = tmp)
 
