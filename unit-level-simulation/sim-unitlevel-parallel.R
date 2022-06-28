@@ -179,6 +179,8 @@ message(paste0("Posterior sampling ", model_names[1]))
 
 samp <- inla.posterior.sample(n = nsamps, result = tmp, seed = sim + 1)
 
+message("DONE!")
+
 # # Calculate summary measures ####
 # cat(paste("Extract summaries for parameters \n"))
 # 
