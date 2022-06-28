@@ -40,17 +40,25 @@ fitINLA <- function(formula, data, lincombs) {
 
 
 # read and format data ####
-samplesize <- 0.5
 load("/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/haz-waz-kenDHS2014.rda")
-stage_1_list <- read_rds(paste0("../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-subsample-",gsub("\\.","_",samplesize),"-hazwaz-stage-1.rds"))
+stage_1_list <- read_rds(paste0("../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-hazwaz-stage-1.rds"))
 results <- stage_1_list[["results"]]
 V.array <- stage_1_list[["V.array"]]
+
 n_regions <- nrow(poly.adm1)
+
+# switch V.array
+for (i in 1:n_regions) {
+    diag2 <- V.array[i, 2, 2]
+    diag1 <- V.array[i, 1, 1]
+    V.array[i, 1, 1] <- diag2
+    V.array[i, 2, 2] <- diag1
+}
 
 ## reformat data into long form
 results.long <- results %>% select(admin1, admin1.name, admin1.char,
                                    meanHAZ.bi, meanWAZ.bi) %>%
-    pivot_longer(cols = c(meanHAZ.bi, meanWAZ.bi),
+    pivot_longer(cols = c(meanWAZ.bi, meanHAZ.bi),
                  names_to = "outcome",
                  names_prefix = "mean",
                  values_to = "value")
@@ -77,7 +85,7 @@ for(j in 1:Nt) {
 }
 
 ## add another index for the shared component
-data$admin1.haz.2 <- data$admin1.haz
+data$admin1.waz.2 <- data$admin1.waz
 
 ## add indeces for iid components in besag + iid formulation
 data$admin1.haz.iid <- data$admin1.haz
@@ -109,10 +117,10 @@ for(j in 1:Nt) {
                          f(", paste("ii.", j, sep=""), ", model=\"iid2d\", n=2,
                          hyper = list(
                          prec1 = list(
-                         initial =", init.prec.haz,", 
+                         initial =", init.prec.waz,", 
                          fixed = TRUE),
                          prec2 = list(
-                         initial =", init.prec.waz,", 
+                         initial =", init.prec.haz,", 
                          fixed = TRUE),
                          cor = list(
                          initial = log((1+", 0, ")/(1-", 0, ")), 
@@ -131,10 +139,10 @@ for(j in 1:Nt) {
                          f(", paste("ii.", j, sep=""), ", model=\"iid2d\", n=2,
                          hyper = list(
                          prec1 = list(
-                         initial =", init.prec.haz,", 
+                         initial =", init.prec.waz,", 
                          fixed = TRUE),
                          prec2 = list(
-                         initial =", init.prec.waz,", 
+                         initial =", init.prec.haz,", 
                          fixed = TRUE),
                          cor = list(
                          initial = log((1+", corr, ")/(1-", corr, ")), 
@@ -144,73 +152,73 @@ for(j in 1:Nt) {
 
 ## Model formulas ####
 formula.univariate.iid <-  formula(paste("value ~ -1 + outcome + 
-                                          f(admin1.haz, model = 'iid', hyper = iid_prior) + 
-                                          f(admin1.waz, model = 'iid', hyper = iid_prior)",
+                                          f(admin1.waz, model = 'iid', hyper = iid_prior) + 
+                                          f(admin1.haz, model = 'iid', hyper = iid_prior)",
                                          paste(add.univariate, collapse = " ")))
 formula.univariate.bym <- formula(paste("value ~ -1 + outcome + 
-                                         f(admin1.haz, model = 'bym2',
+                                         f(admin1.waz, model = 'bym2',
                                            graph = admin1.mat, 
                                            scale.model = T, 
                                            constr = T,
                                            hyper = bym2_prior) +
-                                         f(admin1.waz, model = 'bym2',
+                                         f(admin1.haz, model = 'bym2',
                                            graph = admin1.mat, 
                                            scale.model = T, 
                                            constr = T,
                                            hyper = bym2_prior)",
                                         paste(add.univariate, collapse = " ")))
 formula.bivariate.nonshared.iid <-  formula(paste("value ~ -1 + outcome + 
-                                                   f(admin1.haz, model = 'iid', hyper = iid_prior) + 
-                                                   f(admin1.waz, model = 'iid', hyper = iid_prior)",
+                                                   f(admin1.waz, model = 'iid', hyper = iid_prior) + 
+                                                   f(admin1.haz, model = 'iid', hyper = iid_prior)",
                                                   paste(add.bivariate, collapse = " ")))
 formula.bivariate.nonshared.bym <-  formula(paste("value ~ -1 + outcome + 
-                                                   f(admin1.haz, model = 'bym2',
+                                                   f(admin1.waz, model = 'bym2',
                                                      graph = admin1.mat, 
                                                      scale.model = T, 
                                                      constr = T,
                                                      hyper = bym2_prior) +
-                                                   f(admin1.waz, model = 'bym2',
+                                                   f(admin1.haz, model = 'bym2',
                                                      graph = admin1.mat, 
                                                      scale.model = T, 
                                                      constr = T,
                                                      hyper = bym2_prior)",
                                                   paste(add.bivariate, collapse = " ")))
 formula.bivariate.shared.iid <-  formula(paste("value ~ -1 + outcome + 
-                                                   f(admin1.haz, model = 'iid', hyper = iid_prior) + 
-                                                   f(admin1.waz, model = 'iid', hyper = iid_prior) +
-                                                   f(admin1.haz.2, copy = \"admin1.waz\", 
+                                                   f(admin1.waz, model = 'iid', hyper = iid_prior) + 
+                                                   f(admin1.haz, model = 'iid', hyper = iid_prior) +
+                                                   f(admin1.waz.2, copy = \"admin1.haz\", 
                                                      fixed = FALSE, hyper = lambda_prior)",
-                                                  paste(add.bivariate, collapse = " ")))
+                                               paste(add.bivariate, collapse = " ")))
 formula.bivariate.shared.bym <-  formula(paste("value ~ -1 + outcome + 
-                                                f(admin1.haz, model = 'bym2',
-                                                  graph = admin1.mat, 
-                                                  scale.model = T, 
-                                                  constr = T,
-                                                  hyper = bym2_prior) +
                                                 f(admin1.waz, model = 'bym2',
                                                   graph = admin1.mat, 
                                                   scale.model = T, 
                                                   constr = T,
                                                   hyper = bym2_prior) +
-                                                f(admin1.haz.2, copy = \"admin1.waz\", 
+                                                f(admin1.haz, model = 'bym2',
+                                                  graph = admin1.mat, 
+                                                  scale.model = T, 
+                                                  constr = T,
+                                                  hyper = bym2_prior) +
+                                                f(admin1.waz.2, copy = \"admin1.haz\", 
                                                   fixed = FALSE, hyper = lambda_prior)",
                                                paste(add.bivariate, collapse = " ")))
 formula.bivariate.shared.bym.alt <-  formula(paste("value ~ -1 + outcome + 
-                                                   f(admin1.haz, model = 'besag',
-                                                     graph = admin1.mat, 
-                                                     scale.model = T, 
-                                                     constr = T,
-                                                     hyper = besag_prior) +
-                                                   f(admin1.haz.iid, model = 'iid', hyper = iid_prior) +
                                                    f(admin1.waz, model = 'besag',
                                                      graph = admin1.mat, 
                                                      scale.model = T, 
                                                      constr = T,
                                                      hyper = besag_prior) +
                                                    f(admin1.waz.iid, model = 'iid', hyper = iid_prior) +
-                                                   f(admin1.haz.2, copy = \"admin1.waz\", 
+                                                   f(admin1.haz, model = 'besag',
+                                                     graph = admin1.mat, 
+                                                     scale.model = T, 
+                                                     constr = T,
+                                                     hyper = besag_prior) +
+                                                   f(admin1.haz.iid, model = 'iid', hyper = iid_prior) +
+                                                   f(admin1.waz.2, copy = \"admin1.haz\", 
                                                      fixed = FALSE, hyper = lambda_prior)",
-                                                  paste(add.bivariate, collapse = " ")))
+                                                   paste(add.bivariate, collapse = " ")))
 
 ## linear combinations ####
 
@@ -221,73 +229,84 @@ diag.na.mat <- matrix(NA, nrow = n_regions, ncol = n_regions)
 diag(diag.na.mat) <- 1
 lc.vec.admin1.re <- diag.na.mat
 
-## WAZ
-lc.all.waz <- inla.make.lincombs(outcomeWAZ = lc.vec.fe, 
-                                 admin1.waz = lc.vec.admin1.re)
-names(lc.all.waz) <- gsub("lc", "waz.reg.", names(lc.all.waz))
+## HAZ
+lc.all.haz <- inla.make.lincombs(outcomeHAZ = lc.vec.fe, 
+                                 admin1.haz = lc.vec.admin1.re)
+names(lc.all.haz) <- gsub("lc", "haz.reg.", names(lc.all.haz))
 
-## WAZ if besag + iid
-lc.all.waz.alt <- inla.make.lincombs(outcomeWAZ = lc.vec.fe, 
-                                     admin1.waz = lc.vec.admin1.re,
-                                     admin1.waz.iid = lc.vec.admin1.re)
-names(lc.all.waz.alt) <- gsub("lc", "waz.reg.", names(lc.all.waz.alt))
+# ## WAZ if besag + iid
+# lc.all.waz.alt <- inla.make.lincombs(outcomeWAZ = lc.vec.fe, 
+#                                      admin1.waz = lc.vec.admin1.re,
+#                                      admin1.waz.iid = lc.vec.admin1.re)
+# names(lc.all.waz.alt) <- gsub("lc", "waz.reg.", names(lc.all.waz.alt))
 
-## HAZ nonshared
-lc.all.haz.nonshared <- inla.make.lincombs(outcomeHAZ = lc.vec.fe, 
-                                           admin1.haz = lc.vec.admin1.re)
-names(lc.all.haz.nonshared) <- gsub("lc", "haz.reg.", names(lc.all.haz.nonshared))
+## WAZ nonshared
+lc.all.waz.nonshared <- inla.make.lincombs(outcomeWAZ = lc.vec.fe, 
+                                           admin1.waz = lc.vec.admin1.re)
+names(lc.all.waz.nonshared) <- gsub("lc", "waz.reg.", names(lc.all.waz.nonshared))
 
-## HAZ shared
-lc.all.haz.shared <- inla.make.lincombs(outcomeHAZ = lc.vec.fe, 
-                                        admin1.haz = lc.vec.admin1.re,
-                                        admin1.haz.2 = lc.vec.admin1.re)
-names(lc.all.haz.shared) <- gsub("lc", "haz.reg.", names(lc.all.haz.shared))
+## WAZ shared
+lc.all.waz.shared <- inla.make.lincombs(outcomeWAZ = lc.vec.fe, 
+                                        admin1.waz = lc.vec.admin1.re,
+                                        admin1.waz.2 = lc.vec.admin1.re)
+names(lc.all.waz.shared) <- gsub("lc", "waz.reg.", names(lc.all.waz.shared))
 
-## HAZ shared if besag + iid
-lc.all.haz.shared.alt <- inla.make.lincombs(outcomeHAZ = lc.vec.fe, 
-                                            admin1.haz = lc.vec.admin1.re,
-                                            admin1.haz.iid = lc.vec.admin1.re,
-                                            admin1.haz.2 = lc.vec.admin1.re)
-names(lc.all.haz.shared.alt) <- gsub("lc", "haz.reg.", names(lc.all.haz.shared.alt))
+# ## HAZ shared if besag + iid
+# lc.all.haz.shared.alt <- inla.make.lincombs(outcomeHAZ = lc.vec.fe, 
+#                                             admin1.haz = lc.vec.admin1.re,
+#                                             admin1.haz.iid = lc.vec.admin1.re,
+#                                             admin1.haz.2 = lc.vec.admin1.re)
+# names(lc.all.haz.shared.alt) <- gsub("lc", "haz.reg.", names(lc.all.haz.shared.alt))
 
 # Fit models ####
 
 mod.univariate.iid <- fitINLA(formula = formula.univariate.iid, 
                               data = data, 
-                              lincombs = c(lc.all.haz.nonshared, lc.all.waz))
+                              lincombs = c(lc.all.waz.nonshared, lc.all.haz))
 mod.univariate.bym <- fitINLA(formula = formula.univariate.bym, 
                               data = data, 
-                              lincombs = c(lc.all.haz.nonshared, lc.all.waz))
+                              lincombs = c(lc.all.waz.nonshared, lc.all.haz))
 mod.bivariate.nonshared.iid <- fitINLA(formula = formula.bivariate.nonshared.iid, 
                                        data = data, 
-                                       lincombs = c(lc.all.haz.nonshared, lc.all.waz))
+                                       lincombs = c(lc.all.waz.nonshared, lc.all.haz))
 mod.bivariate.nonshared.bym <- fitINLA(formula = formula.bivariate.nonshared.bym, 
                                        data = data, 
-                                       lincombs = c(lc.all.haz.nonshared, lc.all.waz))
+                                       lincombs = c(lc.all.waz.nonshared, lc.all.haz))
 mod.bivariate.shared.iid <- fitINLA(formula = formula.bivariate.shared.iid, 
                                     data = data, 
-                                    lincombs = c(lc.all.haz.shared, lc.all.waz))
+                                    lincombs = c(lc.all.waz.shared, lc.all.haz))
 mod.bivariate.shared.bym <- fitINLA(formula = formula.bivariate.shared.bym, 
                                     data = data, 
-                                    lincombs = c(lc.all.haz.shared, lc.all.waz))
-mod.bivariate.shared.bym.alt <- fitINLA(formula = formula.bivariate.shared.bym.alt, 
-                                        data = data, 
-                                        lincombs = c(lc.all.haz.shared.alt, lc.all.waz.alt))
+                                    lincombs = c(lc.all.waz.shared, lc.all.haz))
+# mod.bivariate.shared.bym.alt <- fitINLA(formula = formula.bivariate.shared.bym.alt, 
+#                                         data = data, 
+#                                         lincombs = c(lc.all.haz.shared.alt, lc.all.waz.alt))
+
+lambda_prior <- list(beta = list(prior = 'logtnormal', param = c(1, 2)))
+mod.bivariate.shared.bym.2 <- fitINLA(formula = formula.bivariate.shared.bym, 
+                                      data = data, 
+                                      lincombs = c(lc.all.waz.shared, lc.all.haz))
+mod.bivariate.shared.bym$summary.hyperpar[5,]
+mod.bivariate.shared.bym.2$summary.hyperpar[5,]
 
 inla.results <- list(mod.univariate.iid,
                      mod.univariate.bym,
                      mod.bivariate.nonshared.iid,
                      mod.bivariate.nonshared.bym,
                      mod.bivariate.shared.iid,
-                     mod.bivariate.shared.bym,
-                     mod.bivariate.shared.bym.alt)
+                     mod.bivariate.shared.bym
+                     # ,
+                     # mod.bivariate.shared.bym.alt
+)
 names(inla.results) <- c("Univariate IID",
                          "Univariate BYM",
                          "Bivariate nonshared IID", 
                          "Bivariate nonshared BYM",
                          "Bivariate shared IID", 
-                         "Bivariate shared BYM",
-                         "Bivariate shared Besag + IID")
+                         "Bivariate shared BYM"
+                         # ,
+                         # "Bivariate shared Besag + IID"
+)
 
 # Save Results ####
-write_rds(inla.results, file = paste0("../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-subsample-",gsub("\\.","_",samplesize),"-hazwaz-stage-2-inla-all.rds"))
+write_rds(inla.results, file = paste0("../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-hazwaz-stage-2-switched-inla-all.rds"))

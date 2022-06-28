@@ -24,7 +24,7 @@ library(loo)
 load("/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/haz-waz-kenDHS2014.rda")
 
 ## sample data
-samplesize <- 0.75
+samplesize <- 0.5
 set.seed(100)
 any_zeros_ones <- TRUE
 while(any_zeros_ones) {

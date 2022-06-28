@@ -11,33 +11,49 @@ library(knitr)
 library(kableExtra)
 library(magrittr)
 library(rgdal)
+library(INLA)
 
 # Read in data
 
-svyfile <- "/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/KE_2014_DHS_08252021_2356_143252/KEBR72DT/KEBR72FL.DTA"
+wfile <- "/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2008/KEIR52DT/KEIR52FL.DTA"
+mfile <- "/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2008/KEMR52DT/KEMR52FL.DTA"
+hivfile <- "/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2008/KEAR51DT/KEar51fl.DTA"
+dat_w <- read_stata(wfile)
+dat_m <- read_stata(mfile)
+dat_hiv <- read_stata(hivfile)
 
-dat <- read_stata(svyfile)
+# v312: contraceptive use (should we change this to only be HIV preventing contraceptive use??)
+dat_w %<>% 
+    mutate(region = v024, urban_rural = v025, strata = v023,  
+           cluster = v001, household = v002, line = v003,
+           ever_modern_cont = ifelse(v302 == 3, 1, 0)) %>% 
+    select(cluster, household, line, 
+           strata, region, urban_rural,
+           ever_modern_cont)
+dat_m %<>%
+    mutate(region = mv024, urban_rural = mv025, strata = mv023,  
+           cluster = mv001, household = mv002, line = mv003,
+           ever_modern_cont = ifelse(mv302 == 3, 1, 0)) %>% 
+    select(cluster, household, line, 
+           strata, region, urban_rural,
+           ever_modern_cont)
 
-dat %<>% filter(!(hw5 %in% c(9998, 9999)) & !(hw8 %in% c(9998, 9999))) %>%
-    mutate(HAZ = hw5/100, WAZ = hw8/100, 
-           region = v024, urban_rural = v025, strata = v023,
-           weights = v005,  cluster = v001, tmp_admin1 = scounty) %>% 
-    select(HAZ, WAZ,
-           cluster, region, strata, urban_rural, weights, tmp_admin1) %>%
-    filter(!is.na(HAZ) & !is.na(WAZ))
-
-# data plotting
-ggplot(dat, aes(x=HAZ)) + 
-    geom_histogram() +
-    ggtitle("Height for age z-score distribution for KEN DHS 2014") +
-    theme_light()
-
-ggplot(dat, aes(x=WAZ)) + 
-    geom_histogram() +
-    ggtitle("Weight for age z-score distribution for KEN DHS 2014") +
-    theme_light()
-
-table(dat$tmp_admin1)
+dat <- dat_w %>% bind_rows(dat_m) %>%
+    left_join(dat_hiv, 
+              by = c("cluster" = "hivclust",
+                     "household" = "hivnumb",
+                     "line" = "hivline")) %>%
+    filter(!is.na(hiv05)) %>%
+    mutate(weights_hiv = hiv05,
+           hivpos = hiv03) %>%
+    select(cluster, household, line, 
+           strata, region, urban_rural, 
+           weights_hiv,
+           ever_modern_cont, hivpos) %>%
+    mutate(hiv_cont = ifelse(hivpos == 0 & ever_modern_cont == 0, "HIV neg, no cont",
+                             ifelse(hivpos == 0 & ever_modern_cont ==  1, "HIV neg, cont",
+                                    ifelse(hivpos == 1 & ever_modern_cont == 0, "HIV pos, no cont",
+                                           "HIV pos, cont"))))
 
 # geo data
 poly.layer.adm0 <- paste('gadm36', 'KEN',
@@ -62,17 +78,17 @@ admin1.names <- data.frame(GADM = poly.adm1@data$NAME_1,
                            Internal = rownames(admin1.mat))
 
 # assign lat and long
-points.path <- "/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/KE_2014_DHS_08252021_2356_143252/KEGE71FL"
+points.path <- "/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2008/KEGE52FL"
 points <- readOGR(dsn = points.path,
-                  layer = "KEGE71FL")
+                  layer = "KEGE52FL")
 
 wrong.points <- which(points@data$LATNUM == 0.0 &
-                          points@data$LONGNUM == 0.0)
+                      points@data$LONGNUM == 0.0)
 plot(points[-wrong.points,])
 
 dat.tmp <- dat
 dat.tmp <- dat.tmp[!(dat.tmp$cluster %in% points@data$DHSCLUST[wrong.points]),]
-if (sum(points@data$DHSCLUST[wrong.points] %in% unique(dat.tmp$cluster) != 0)) stop("deletion of wrong points unsuccessful")
+if (sum(points@data$DHSCLUST[wrong.points] %in% unique(dat.tmp$cluster)) != 0) stop("deletion of wrong points unsuccessful")
 
 dat.tmp$LONGNUM <- dat.tmp$LATNUM <- NA
 for(i in 1:dim(points)[1]){
@@ -154,4 +170,4 @@ rownames(admin1.mat) <- 1:nrow(admin1.mat)
 
 # save data
 save(dat, poly.adm1, admin1.mat, node.info, scaling_factor,
-     file = "/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/haz-waz-kenDHS2014.rda")
+     file = "/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2008/data/hiv-cont-kenDHS2008.rda")

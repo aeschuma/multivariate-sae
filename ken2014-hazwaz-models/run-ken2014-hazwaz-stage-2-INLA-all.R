@@ -273,6 +273,14 @@ mod.bivariate.shared.bym.alt <- fitINLA(formula = formula.bivariate.shared.bym.a
                                         data = data, 
                                         lincombs = c(lc.all.haz.shared.alt, lc.all.waz.alt))
 
+# test new lambda prior
+lambda_prior <- list(beta = list(prior = 'normal', param = c(1, 2)))
+mod.bivariate.shared.bym.2 <- fitINLA(formula = formula.bivariate.shared.bym, 
+                                      data = data, 
+                                      lincombs = c(lc.all.haz.shared, lc.all.waz))
+mod.bivariate.shared.bym$summary.hyperpar[5,]
+mod.bivariate.shared.bym.2$summary.hyperpar[5,]
+
 inla.results <- list(mod.univariate.iid,
                      mod.univariate.bym,
                      mod.bivariate.nonshared.iid,

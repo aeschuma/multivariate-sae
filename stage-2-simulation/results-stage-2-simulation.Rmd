@@ -138,12 +138,20 @@ for (i in which_runs) {
     rm(results_comp)
     
     dgmnum <- res_run$dgm_number[res_run$run_number == run_number]
-
-    for (j in 1:length(tmps[[i]])) {
-        print(kable(tmps[[i]][[j]], format = "markdown", caption = paste0("Model:", model_names[j]), digits = 3,
+    
+    run_results <- cbind(model = c(model_names[1], ""), tmps[[i]][[1]])
+    if (length(tmps[[i]]) > 1) {
+        for (j in 2:length(tmps[[i]])) {
+            # extract latent mean results
+            tmp_res <- cbind(model = c(model_names[j], ""), 
+                             tmps[[i]][[j]][tmps[[i]][[j]]$param %in% c("HAZ latent means", "WAZ latent means"),])
+            run_results <- rbind(run_results, tmp_res)
+        }   
+    }
+    
+    print(kable(tmps[[i]][[j]], format = "markdown", caption = paste0("Model: ", model_names[j]), digits = 3,
               col.names = c("parameter", "bias", "abs bias", "relative abs bias", "80% coverage", "80% width", 
                             "95% coverage", "95% width")))
-    }
 }
 ```
 

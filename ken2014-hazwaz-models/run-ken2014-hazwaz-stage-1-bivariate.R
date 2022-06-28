@@ -52,6 +52,7 @@ for(i in 1:n_regions) {
     admin1.tmp <- admin1v[i]
     
     tmp <- subset(my.svydesign, admin1.char == admin1.tmp)
+    
     means.svymean <- svymean(~HAZ + WAZ, tmp)
     means.svymean.flip <- svymean(~WAZ + HAZ, tmp)
     

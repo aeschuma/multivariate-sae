@@ -53,22 +53,22 @@ comparison_scatter <- function(data, measure, x_var, y_var) {
     xyvars <- c(x_var, y_var)
     labs <- c(x_var, y_var)
     
-    if (measure == "haz.icar.50") {
-        main <- "Median HAZ ICAR RE"
-    } else if (measure == "waz.icar.50") {
-        main <- "Median WAZ ICAR RE"
-    } else if (measure == "haz.iid.50") {
-        main <- "Median HAZ IID RE"
-    } else if (measure == "waz.iid.50") {
-        main <- "Median WAZ IID RE"
-    } else if (measure == "haz.pred.50") {
-        main <- "Median predicted HAZ"
-    } else if (measure == "waz.pred.50") {
-        main <- "Median predicted WAZ"
-    } else if (measure == "haz.pred.width80") {
-        main <- "Width of HAZ posterior 80% interval"
-    } else if (measure == "waz.pred.width80") {
-        main <- "Width of WAZ posterior 80% interval"
+    if (measure == "beta1.icar.50") {
+        main <- "Median beta1 ICAR RE"
+    } else if (measure == "beta2.icar.50") {
+        main <- "Median beta2 ICAR RE"
+    } else if (measure == "beta1.iid.50") {
+        main <- "Median beta1 IID RE"
+    } else if (measure == "beta2.iid.50") {
+        main <- "Median beta2 IID RE"
+    } else if (measure == "beta1.pred.50") {
+        main <- "Median predicted beta1"
+    } else if (measure == "beta2.pred.50") {
+        main <- "Median predicted beta2"
+    } else if (measure == "beta1.pred.width80") {
+        main <- "Width of beta1 posterior 80% interval"
+    } else if (measure == "beta2.pred.width80") {
+        main <- "Width of beta2 posterior 80% interval"
     }
     
     # calculate mean abs diff
@@ -89,7 +89,7 @@ comparison_scatter <- function(data, measure, x_var, y_var) {
         theme_light() 
 }
 
-# plot comparisons between 3 models x 2 outcomes (HAZ and WAZ)
+# plot comparisons between 3 models x 2 outcomes (beta1 and beta2)
 twoway_comp_plot <- function(data, measure) {
     
     # testing
@@ -100,13 +100,13 @@ twoway_comp_plot <- function(data, measure) {
     
     measures <- c(NA, NA)
     if (measure == "icar") {
-        measures <- c("haz.icar.50", "waz.icar.50")
+        measures <- c("beta1.icar.50", "beta2.icar.50")
     } else if (measure == "iid") {
-        measures <- c("haz.iid.50", "waz.iid.50")
+        measures <- c("beta1.iid.50", "beta2.iid.50")
     } else if (measure == "pred") {
-        measures <- c("haz.pred.50", "waz.pred.50")
+        measures <- c("beta1.pred.50", "beta2.pred.50")
     } else if (measure == "pred.width") {
-        measures <- c("haz.pred.width95", "waz.pred.width95")
+        measures <- c("beta1.pred.width95", "beta2.pred.width95")
     } 
     
     # storage for list of plots
@@ -155,12 +155,12 @@ twoway_comp_plot <- function(data, measure) {
 load("../../../Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/haz-waz-kenDHS2014.rda")
 
 ## direct estimates (stage 1)
-stage_1_list <- read_rds("../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-hazwaz-stage-1.rds")
+stage_1_list <- read_rds("../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-multinomial/ken2014-multinomial-stage-1.rds")
 results_direct <- stage_1_list$results
 n_regions <- nrow(results_direct)
 
 ## stage 2 estimates (from inla)
-stage_2_list <- read_rds("../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-hazwaz-stage-2-inla-all.rds")
+stage_2_list <- read_rds("../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-multinomial/ken2014-multinomial-stage-2-inla-all.rds")
 stage_2_list[[7]] <- NULL
 n_stage_2_models <- length(stage_2_list)
 
@@ -169,43 +169,43 @@ n_stage_2_models <- length(stage_2_list)
 ## direct estimates
 allests <- results_direct %>% as_tibble() %>%
     mutate(model.name = "Direct",
-           haz.pred.width95 = qnorm(0.975) * 2 * seHAZ.bi,
-           waz.pred.width95 = qnorm(0.975) * 2 * seWAZ.bi) %>%
-    select(model.name, admin1, admin1.name, meanHAZ.bi, meanWAZ.bi, haz.pred.width95, waz.pred.width95) %>%
-    rename(haz.pred.50 = meanHAZ.bi,
-           waz.pred.50 = meanWAZ.bi) %>%
-    mutate(haz.iid.50 = NA,
-           waz.iid.50 = NA,
-           haz.icar.50 = NA,
-           waz.icar.50 = NA)
+           beta1.pred.width95 = qnorm(0.975) * 2 * se_beta1,
+           beta2.pred.width95 = qnorm(0.975) * 2 * se_beta2) %>%
+    select(model.name, admin1, admin1.name, mean_beta1, mean_beta2, beta1.pred.width95, beta2.pred.width95) %>%
+    rename(beta1.pred.50 = mean_beta1,
+           beta2.pred.50 = mean_beta2) %>%
+    mutate(beta1.iid.50 = NA,
+           beta2.iid.50 = NA,
+           beta1.icar.50 = NA,
+           beta2.icar.50 = NA)
 
 for (i in 1:length(stage_2_list)) {
     tmpmodname <- names(stage_2_list)[i]
     mod.preds <- stage_2_list[[i]]$summary.lincomb.derived
-    haz.pred <- mod.preds[grepl("haz", rownames(mod.preds)),]
-    waz.pred <- mod.preds[grepl("waz", rownames(mod.preds)),]
+    beta1.pred <- mod.preds[grepl("outcome1", rownames(mod.preds)),]
+    beta2.pred <- mod.preds[grepl("oucome2", rownames(mod.preds)),]
     if (tmpmodname %in% c("Univariate IID", "Bivariate nonshared IID", "Bivariate shared IID")) {
-        haz.re.iid <- stage_2_list[[i]]$summary.random$admin1.haz$`0.5quant`
-        waz.re.iid <- stage_2_list[[i]]$summary.random$admin1.waz$`0.5quant`
-        haz.re.icar <- rep(NA, n_regions)
-        waz.re.icar <- rep(NA, n_regions)
+        beta1.re.iid <- stage_2_list[[i]]$summary.random$admin1.beta1$`0.5quant`
+        beta2.re.iid <- stage_2_list[[i]]$summary.random$admin1.beta2$`0.5quant`
+        beta1.re.icar <- rep(NA, n_regions)
+        beta2.re.icar <- rep(NA, n_regions)
     } else if (tmpmodname %in% c("Univariate BYM", "Bivariate nonshared BYM", "Bivariate shared BYM")) {
-        u.haz <- stage_2_list[[i]]$summary.random$admin1.haz$`0.5quant`[(n_regions + 1):(n_regions*2)]
-        phi.haz <- stage_2_list[[i]]$summary.hyperpar["Phi for admin1.haz", "0.5quant"]
-        tau.haz <- stage_2_list[[i]]$summary.hyperpar["Precision for admin1.haz", "0.5quant"]
-        x.haz <- stage_2_list[[i]]$summary.random$admin1.haz$`0.5quant`[1:n_regions]
-        v.haz <- ((sqrt(tau.haz)*x.haz) - (sqrt(phi.haz)*u.haz))/(sqrt(1-phi.haz))
+        u.beta1 <- stage_2_list[[i]]$summary.random$admin1.beta1$`0.5quant`[(n_regions + 1):(n_regions*2)]
+        phi.beta1 <- stage_2_list[[i]]$summary.hyperpar["Phi for admin1.beta1", "0.5quant"]
+        tau.beta1 <- stage_2_list[[i]]$summary.hyperpar["Precision for admin1.beta1", "0.5quant"]
+        x.beta1 <- stage_2_list[[i]]$summary.random$admin1.beta1$`0.5quant`[1:n_regions]
+        v.beta1 <- ((sqrt(tau.beta1)*x.beta1) - (sqrt(phi.beta1)*u.beta1))/(sqrt(1-phi.beta1))
         
-        u.waz <- stage_2_list[[i]]$summary.random$admin1.waz$`0.5quant`[(n_regions + 1):(n_regions*2)]
-        phi.waz <- stage_2_list[[i]]$summary.hyperpar["Phi for admin1.waz", "0.5quant"]
-        tau.waz <- stage_2_list[[i]]$summary.hyperpar["Precision for admin1.waz", "0.5quant"]
-        x.waz <- stage_2_list[[i]]$summary.random$admin1.waz$`0.5quant`[1:n_regions]
-        v.waz <- ((sqrt(tau.waz)*x.waz) - (sqrt(phi.waz)*u.waz))/(sqrt(1-phi.waz))
+        u.beta2 <- stage_2_list[[i]]$summary.random$admin1.beta2$`0.5quant`[(n_regions + 1):(n_regions*2)]
+        phi.beta2 <- stage_2_list[[i]]$summary.hyperpar["Phi for admin1.beta2", "0.5quant"]
+        tau.beta2 <- stage_2_list[[i]]$summary.hyperpar["Precision for admin1.beta2", "0.5quant"]
+        x.beta2 <- stage_2_list[[i]]$summary.random$admin1.beta2$`0.5quant`[1:n_regions]
+        v.beta2 <- ((sqrt(tau.beta2)*x.beta2) - (sqrt(phi.beta2)*u.beta2))/(sqrt(1-phi.beta2))
         
-        haz.re.iid <- v.haz
-        waz.re.iid <- v.waz
-        haz.re.icar <- u.haz
-        waz.re.icar <- u.waz
+        beta1.re.iid <- v.beta1
+        beta2.re.iid <- v.beta2
+        beta1.re.icar <- u.beta1
+        beta2.re.icar <- u.beta2
     }
     
     
@@ -213,14 +213,14 @@ for (i in 1:length(stage_2_list)) {
     res.tmp <- tibble(model.name = rep(tmpmodname, n_regions),
                       admin1 = results_direct$admin1,
                       admin1.name = results_direct$admin1.name,
-                      haz.iid.50 = haz.re.iid, 
-                      waz.iid.50 = waz.re.iid,
-                      haz.icar.50 = haz.re.icar, 
-                      waz.icar.50 = waz.re.icar,
-                      haz.pred.50 = haz.pred$`0.5quant`, 
-                      haz.pred.width95 = haz.pred$`0.975quant` - haz.pred$`0.025quant`, 
-                      waz.pred.50 = waz.pred$`0.5quant`, 
-                      waz.pred.width95 = waz.pred$`0.975quant` - waz.pred$`0.025quant`)
+                      beta1.iid.50 = beta1.re.iid, 
+                      beta2.iid.50 = beta2.re.iid,
+                      beta1.icar.50 = beta1.re.icar, 
+                      beta2.icar.50 = beta2.re.icar,
+                      beta1.pred.50 = beta1.pred$`0.5quant`, 
+                      beta1.pred.width95 = beta1.pred$`0.975quant` - beta1.pred$`0.025quant`, 
+                      beta2.pred.50 = beta2.pred$`0.5quant`, 
+                      beta2.pred.width95 = beta2.pred$`0.975quant` - beta2.pred$`0.025quant`)
     
     allests <- allests %>% bind_rows(res.tmp)
 }
@@ -264,22 +264,22 @@ kable(modcomp, col.names = c("Model","WAIC", "DIC", "CPO"),
 model_name <- c("Direct", "Univariate IID", "Univariate BYM",  
            "Bivariate nonshared IID", "Bivariate shared IID",
            "Bivariate nonshared BYM", "Bivariate shared BYM")
-outcome <- c("haz", "waz")
+outcome <- c("beta1", "beta2")
 reg <- 1:47
 posterior_sd_res <- expand_grid(model_name, outcome, reg)
 posterior_sd_res$sd <- NA
 
 # store direct estimates
-posterior_sd_res$sd[posterior_sd_res$model_name == "Direct" & posterior_sd_res$outcome == "haz"] <- results_direct$seHAZ.bi
-posterior_sd_res$sd[posterior_sd_res$model_name == "Direct" & posterior_sd_res$outcome == "waz"] <- results_direct$seWAZ.bi
+posterior_sd_res$sd[posterior_sd_res$model_name == "Direct" & posterior_sd_res$outcome == "beta1"] <- results_direct$se_beta1
+posterior_sd_res$sd[posterior_sd_res$model_name == "Direct" & posterior_sd_res$outcome == "beta2"] <- results_direct$se_beta2
 
 # save posterior SDs of area-level estimates
 for (i in 1:length(stage_2_list)) {
   mod.preds <- stage_2_list[[i]]$summary.lincomb.derived
-  haz.pred <- mod.preds[grepl("haz", rownames(mod.preds)),]
-  waz.pred <- mod.preds[grepl("waz", rownames(mod.preds)),]
-  posterior_sd_res$sd[posterior_sd_res$model_name == names(stage_2_list)[i] & posterior_sd_res$outcome == "haz"] <- haz.pred$sd
-  posterior_sd_res$sd[posterior_sd_res$model_name == names(stage_2_list)[i] & posterior_sd_res$outcome == "waz"] <- waz.pred$sd
+  beta1.pred <- mod.preds[grepl("outcome1", rownames(mod.preds)),]
+  beta2.pred <- mod.preds[grepl("oucome2", rownames(mod.preds)),]
+  posterior_sd_res$sd[posterior_sd_res$model_name == names(stage_2_list)[i] & posterior_sd_res$outcome == "beta1"] <- beta1.pred$sd
+  posterior_sd_res$sd[posterior_sd_res$model_name == names(stage_2_list)[i] & posterior_sd_res$outcome == "beta2"] <- beta2.pred$sd
 }
 
 # formatting all results ####
@@ -362,14 +362,14 @@ posterior_sd_res %<>% mutate(model_factor = fct_relevel(as.factor(model_name),
                                                         c("Direct", names(stage_2_list))))
 
 # make posterior sd plots ####
-ggplot(posterior_sd_res %>% filter(outcome == "haz"), aes(x = sd, y = reorder(model_factor, sd, na.rm = TRUE), fill = model_factor)) + 
+ggplot(posterior_sd_res %>% filter(outcome == "beta1"), aes(x = sd, y = reorder(model_factor, sd, na.rm = TRUE), fill = model_factor)) + 
     geom_boxplot(show.legend = FALSE) + 
     scale_fill_viridis(option = "C", discrete = TRUE, alpha = 0.5) +
     xlab("posterior SDs") +
     ylab("Model") +
     theme_light()
 
-ggsave("posterior_sd_compare.pdf", width = 7, height = 4.5)
+ggsave("posterior_sd_compare-multinomial.pdf", width = 7, height = 4.5)
     
 # maps of results ####
 n_cats <- 15
@@ -380,12 +380,12 @@ all.results.wide <- all.results %>%
     select(admin1.name, model.name, measure, value) %>%
     pivot_wider(names_from = c(model.name, measure), values_from = value)
 names(all.results.wide) <- gsub(" ", "_", names(all.results.wide))
-outcomes <- c("Bivariate_shared_BYM_haz.iid.50", "Bivariate_shared_BYM_haz.icar.50",
-              "Bivariate_shared_BYM_waz.iid.50", "Bivariate_shared_BYM_waz.icar.50")
-outcomes.names <- c("HAZ IID", "HAZ ICAR",
-                    "WAZ IID", "WAZ ICAR")
+outcomes <- c("Bivariate_shared_BYM_beta1.iid.50", "Bivariate_shared_BYM_beta1.icar.50",
+              "Bivariate_shared_BYM_beta2.iid.50", "Bivariate_shared_BYM_beta2.icar.50")
+outcomes.names <- c("beta1 IID", "beta1 ICAR",
+                    "beta2 IID", "beta2 ICAR")
 
-pdf("shared-bym-haz-waz-iid-icar-compare.pdf", width = 9, height = 9)
+pdf("shared-bym-multinomial-iid-icar-compare.pdf", width = 9, height = 9)
 tmp <- merge(poly.adm1, all.results.wide[, c("admin1.name", outcomes)],
              by.x = "NAME_1", by.y = "admin1.name")
 sp::spplot(obj = tmp, zcol = outcomes,
@@ -395,12 +395,12 @@ sp::spplot(obj = tmp, zcol = outcomes,
            names.attr = outcomes.names)
 dev.off()
 
-pdf("shared-bym-haz-waz-pred.pdf", width = 9, height = 9)
+pdf("shared-bym-multinomial-pred.pdf", width = 9, height = 9)
 
-outcomes <- c("Bivariate_shared_BYM_haz.pred.50", "Bivariate_shared_BYM_haz.pred.width95",
-              "Bivariate_shared_BYM_waz.pred.50", "Bivariate_shared_BYM_waz.pred.width95")
-outcomes.names <- c("HAZ posterior median", "HAZ 95% width",
-                    "WAZ posterior median", "WAZ 95% width")
+outcomes <- c("Bivariate_shared_BYM_beta1.pred.50", "Bivariate_shared_BYM_beta1.pred.width95",
+              "Bivariate_shared_BYM_beta2.pred.50", "Bivariate_shared_BYM_beta2.pred.width95")
+outcomes.names <- c("beta1 posterior median", "beta1 95% width",
+                    "beta2 posterior median", "beta2 95% width")
 
 tmp <- merge(poly.adm1, all.results.wide[, c("admin1.name", outcomes[c(1, 3)])],
              by.x = "NAME_1", by.y = "admin1.name")
@@ -424,42 +424,42 @@ dev.off()
 
 # compare median estimate
 twoway_comp_plot(all.results %>% filter(model.name %in% c("Direct", "Univariate IID", "Univariate BYM")), "pred")
-ggsave("med_estimate_compare_univariate.pdf",
+ggsave("med_estimate_compare_univariate-multinomial.pdf",
        width = 8.5, height = 3.6)
 
 twoway_comp_plot(all.results %>% filter(model.name %in% c("Direct",  
                                                      "Bivariate nonshared IID", "Bivariate shared IID")), "pred")
-ggsave("med_estimate_compare_bivariate_IID.pdf",
+ggsave("med_estimate_compare_bivariate_IID-multinomial.pdf",
        width = 8.5, height = 3.6)
 
 twoway_comp_plot(all.results %>% filter(model.name %in% c("Direct",
                                                           "Bivariate nonshared BYM", "Bivariate shared BYM")), "pred")
-ggsave("med_estimate_compare_bivariate_bym2.pdf",
+ggsave("med_estimate_compare_bivariate_bym2-multinomial.pdf",
        width = 8.5, height = 3.6)
 
 # IID vs ICAR plots ####
-ggplot(all.results %>% 
-           filter(measure %in% c("haz.iid.50", "waz.icar.50")) %>%
-           filter(model.name %in% c("Bivariate nonshared BYM2", "Bivariate shared BYM2")) %>%
-           pivot_wider(names_from = "measure", values_from = "value"),
-       aes(x = waz.icar.50, y = haz.iid.50)) +
-    geom_point() + 
-    geom_smooth(method = "lm", formula = y ~ x) +
-    facet_wrap(~ model_name, nrow = 1) +
-    ylab("HAZ IID") +
-    xlab("WAZ ICAR") +
-    theme_light()
-ggsave("haz_iid_waz_icar_compare_bivariate_nonshared_vs_shared.pdf")
+# ggplot(all.results %>% 
+#            filter(measure %in% c("beta1.iid.50", "beta2.icar.50")) %>%
+#            filter(model_name %in% c("Bivariate nonshared BYM2", "Bivariate shared BYM2")) %>%
+#            pivot_wider(names_from = "measure", values_from = "value"),
+#        aes(x = beta2.icar.50, y = beta1.iid.50)) +
+#     geom_point() + 
+#     geom_smooth(method = "lm", formula = y ~ x) +
+#     facet_wrap(~ model_name, nrow = 1) +
+#     ylab("beta1 IID") +
+#     xlab("beta2 ICAR") +
+#     theme_light()
+# ggsave("beta1_iid_beta2_icar_compare_bivariate_nonshared_vs_shared-multinomial.pdf")
 
-# compare HAZ and WAZ preds ####
+# compare beta1 and beta2 preds ####
 ggplot(all.results %>% 
-           filter(measure %in% c("haz.pred.50", "waz.pred.50")) %>%
+           filter(measure %in% c("beta1.pred.50", "beta2.pred.50")) %>%
            pivot_wider(names_from = "measure", values_from = "value"),
-       aes(x = waz.pred.50, y = haz.pred.50)) +
+       aes(x = beta2.pred.50, y = beta1.pred.50)) +
     geom_point() + 
     geom_smooth(method = "lm", formula = y ~ x) +
-    facet_wrap(~ model, nrow = 1) +
-    ylab("HAZ") +
-    xlab("WAZ") +
+    facet_wrap(~ model_factor, nrow = 1) +
+    ylab("beta1") +
+    xlab("beta2") +
     theme_light()
-ggsave("haz_waz_med_estimate_compare.pdf")
+ggsave("multinomial_med_estimate_compare.pdf", width = 9, height = 5)
