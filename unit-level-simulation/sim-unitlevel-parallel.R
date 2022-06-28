@@ -14,7 +14,7 @@ library(scales); library(RColorBrewer); library(ggplot2); library(tidyverse);
 library(haven); library(knitr); library(INLA); library(readr); library(magrittr);
 
 ## TESTING THE CODE?
-testing <- FALSE
+testing <- TRUE
 
 ## define directories
 
@@ -46,13 +46,13 @@ cat(paste("set parameters from command args \n"))
 # Set parameters! ####
 if (testing) {
     ## data generation options
-    dgm <- 1
+    dgm <- 7
     
     ## which run
-    run_number <- 999
+    run_number <- 1
     
     ## which simulation
-    sim <- 499
+    sim <- 1
 } else {
     ## data generation options
     dgm <- as.numeric(commandArgs(trailingOnly=TRUE)[1])
