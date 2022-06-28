@@ -33,6 +33,9 @@ setwd(wd)
 # set number of cores to the max possible
 options(mc.cores = detectCores())
 
+# start time for run time
+start_time <- Sys.time()
+
 # Load data and functions ####
 
 # load simulation functions:
@@ -46,7 +49,7 @@ cat(paste("set parameters from command args \n"))
 # Set parameters! ####
 if (testing) {
     ## data generation options
-    dgm <- 7
+    dgm <- 1
     
     ## which run
     run_number <- 1
@@ -176,6 +179,7 @@ sim_res <- data.frame(param = c(parnames, "HAZ latent means", "WAZ latent means"
                       coverage.95 = NA,
                       width.95 = NA)
 sim_res <- rep(list(sim_res), length(inla.results))
+names(sim_res) <- names(inla.results)
 
 # true latent means
 real_means <- simulated_data$latent_params %>% 
@@ -224,6 +228,8 @@ for (i in 1:length(sim_res)) {
         }
     }
 }
+
+sim_res$run_time <- Sys.time() - start_time
 
 # Save results ####
 cat(paste("Save results \n"))
