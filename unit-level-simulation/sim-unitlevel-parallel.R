@@ -97,6 +97,11 @@ simulated_data <- simulateData(dgm_specs = my_dgm,
 # Fit INLA models ####
 cat(paste("Fit INLA models \n"))
 nsamps <- 100
+
+# models to run  ####
+model_names <- c("IID nonshared", "BYM nonshared",
+                 "IID shared", "BYM shared")
+
 # inla.results <- fitAllINLAmodels(simulated_data = simulated_data, 
 #                                  nsamps = nsamps,
 #                                  testing = FALSE)
@@ -104,7 +109,7 @@ nsamps <- 100
 message(paste0("Fitting ", model_names[i]))
 
 # get number of regions
-n_regions <- length(unique(data$admin1))
+n_regions <- length(unique(simulated_data$data$admin1))
 
 # priors ####
 iid_prior <- list(prec = list(prior = "pc.prec",
@@ -112,10 +117,6 @@ iid_prior <- list(prec = list(prior = "pc.prec",
 bym2_prior <- list(phi=list(prior="logitbeta", param=c(1, 1), initial=0.5), 
                    prec=list(prior="pc.prec", param=c(1, 0.01), initial=5))
 lambda_prior <- list(beta = list(prior = 'logtnormal', param = c(0, 1)))
-
-# models to run  ####
-model_names <- c("IID nonshared", "BYM nonshared",
-                 "IID shared", "BYM shared")
 
 # formulas ####
 formulas <- vector(mode = "list", length = length(model_names))
