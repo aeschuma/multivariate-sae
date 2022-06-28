@@ -78,7 +78,7 @@ for (a in dgm_to_run) {
                       ",rr=",run_number,
                       ",s=",s,
                       ",t=",running_total,
-                      " -N s2sim_",running_total,
+                      " -N ul_sim_",running_total,
                       " ",
                       script)
         
