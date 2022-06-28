@@ -27,7 +27,7 @@ if (root == "P:/") {
 ## load libraries
 
 ## testing?
-testing_loop <- TRUE
+testing_loop <- FALSE
 testing_script <- FALSE
 
 ## define directories
