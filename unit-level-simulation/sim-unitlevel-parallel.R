@@ -14,7 +14,7 @@ library(scales); library(RColorBrewer); library(ggplot2); library(tidyverse);
 library(haven); library(knitr); library(INLA); library(readr); library(magrittr);
 
 ## TESTING THE CODE?
-testing <- TRUE
+testing <- FALSE
 
 ## define directories
 
