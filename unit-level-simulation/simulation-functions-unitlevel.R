@@ -219,7 +219,7 @@ simulateData <- function(dgm_specs, sample_info, Amat, scaling_factor, seed_re, 
     return(output)
 }
 
-fitAllINLAmodels <- function(simulated_data, nsamps, testing = FALSE) {
+fitAllINLAmodels <- function(simulated_data, nsamps, seed = 1, testing = FALSE) {
     
     if (testing) {
         simulated_data <- simulated_data
@@ -313,7 +313,7 @@ fitAllINLAmodels <- function(simulated_data, nsamps, testing = FALSE) {
         
         message(paste0("Posterior sampling ", model_names[i]))
         
-        samp <- inla.posterior.sample(n = nsamps, result = tmp)
+        samp <- inla.posterior.sample(n = nsamps, result = tmp, seed = seed)
         
         message(paste0("Posterior summaries ", model_names[i]))
         
