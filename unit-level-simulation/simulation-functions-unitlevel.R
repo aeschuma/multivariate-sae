@@ -226,6 +226,8 @@ fitAllINLAmodels <- function(simulated_data, nsamps, testing = FALSE) {
         nsamps <- 10
     }
     
+    message("format data and set up model")
+    
     data <- simulated_data$data
     admin1.mat <- simulated_data$Amat
     
@@ -295,7 +297,11 @@ fitAllINLAmodels <- function(simulated_data, nsamps, testing = FALSE) {
     results <- vector(mode = "list", length = length(model_names))
     names(results) <- model_names
     
+    message("fitting models")
+    
     for (i in 1:length(model_names)) {
+        
+        message(paste0("Fitting ", model_names[i]))
         tmp <- inla(formulas[[ model_names[i] ]], data = data,
                     family = rep("gaussian", 2),
                     quantiles=c(0.025, 0.1, 0.5, 0.9, 0.975),
@@ -305,7 +311,11 @@ fitAllINLAmodels <- function(simulated_data, nsamps, testing = FALSE) {
                     # control.fixed = list(prec = list(default = 0.001), correlation.matrix=T),
                     control.compute = list(config=T, waic = F, dic = F, cpo = F))
         
+        message(paste0("Posterior sampling ", model_names[i]))
+        
         samp <- inla.posterior.sample(n = nsamps, result = tmp)
+        
+        message(paste0("Posterior summaries ", model_names[i]))
         
         # process hyperpars
         hyperpar_names <- names(samp[[1]]$hyperpar)
@@ -388,6 +398,9 @@ fitAllINLAmodels <- function(simulated_data, nsamps, testing = FALSE) {
         # save results
         results[[ model_names[i] ]]$fit <- tmp
         results[[ model_names[i] ]]$latent_means <- latent_means
+        
+        message("Done!")
+        
     }
     
     return(results)
