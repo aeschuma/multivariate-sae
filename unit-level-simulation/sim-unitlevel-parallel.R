@@ -49,13 +49,13 @@ cat(paste("set parameters from command args \n"))
 # Set parameters! ####
 if (testing) {
     ## data generation options
-    dgm <- 1
+    dgm <- 7
     
     ## which run
-    run_number <- 1
+    run_number <- 2
     
     ## which simulation
-    sim <- 1
+    sim <- 2
 } else {
     ## data generation options
     dgm <- as.numeric(commandArgs(trailingOnly=TRUE)[1])
