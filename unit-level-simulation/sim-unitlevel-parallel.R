@@ -14,7 +14,7 @@ library(scales); library(RColorBrewer); library(ggplot2); library(tidyverse);
 library(haven); library(knitr); library(INLA); library(readr); library(magrittr);
 
 ## TESTING THE CODE?
-testing <- FALSE
+testing <- TRUE
 
 ## define directories
 
@@ -123,9 +123,14 @@ mod_summary <- tibble(params = parnames,
 mod_summary <- rep(list(mod_summary), length(inla.results))
 latent_mean_summary <- vector(mode = "list", length = length(inla.results))
 for (i in 1:length(inla.results))  {
+    message(paste0("Model ", names(mod_summary)[i]))
+    
+    message("FEs")
     mod_summary[[i]][mod_summary[[i]]$params %in% c("beta[1]", "beta[2]", "gamma[1]", "gamma[2]"), c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- inla.results[[i]]$fit$summary.fixed[, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]
     mod_summary[[i]][mod_summary[[i]]$params %in% c("beta[1]", "beta[2]", "gamma[1]", "gamma[2]"), c("var")] <- inla.results[[i]]$fit$summary.fixed[, c("sd")]^2
     hyperpar_names <- rownames(inla.results[[i]]$fit$summary.hyperpar)
+    
+    message("REs")
     for(j in 1:length(hyperpar_names)) {
         tmpname <- hyperpar_names[j]
         if (str_detect(tmpname, "Precision")) {
