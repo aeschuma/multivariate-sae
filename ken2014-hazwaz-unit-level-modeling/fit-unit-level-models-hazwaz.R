@@ -239,7 +239,7 @@ for (i in 1:length(model_names)) {
     # store results
     model_results[[ model_names[i] ]]$samples_final <- list()
     model_results[[ model_names[i] ]]$samples_final$haz <- fitted_haz_mat
-    model_results[[ model_names[i] ]]$samples_final <- fitted_waz_mat
+    model_results[[ model_names[i] ]]$samples_final$waz <- fitted_waz_mat
     
     # run time
     model_results[[ model_names[i] ]]$run_time <- Sys.time() - start_time

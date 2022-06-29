@@ -287,19 +287,19 @@ for (r in 1:n_regions) {
                                          data = tmp, 
                                          lincombs = c(lc.all.1.nonshared, lc.all.2))
     mod_list$`Univariate BYM` <- fitINLA(formula = formula.univariate.bym, 
-                                         data = data, 
+                                         data = tmp, 
                                          lincombs = c(lc.all.1.nonshared, lc.all.2))
     mod_list$`Bivariate nonshared IID` <- fitINLA(formula = formula.bivariate.nonshared.iid, 
-                                                  data = data, 
+                                                  data = tmp, 
                                                   lincombs = c(lc.all.1.nonshared, lc.all.2))
     mod_list$`Bivariate nonshared BYM` <- fitINLA(formula = formula.bivariate.nonshared.bym, 
-                                                  data = data, 
+                                                  data = tmp, 
                                                   lincombs = c(lc.all.1.nonshared, lc.all.2))
     mod_list$`Bivariate shared IID` <- fitINLA(formula = formula.bivariate.shared.iid, 
-                                               data = data, 
+                                               data = tmp, 
                                                lincombs = c(lc.all.1.shared, lc.all.2))
     mod_list$`Bivariate shared BYM` <- fitINLA(formula = formula.bivariate.shared.bym, 
-                                               data = data, 
+                                               data = tmp, 
                                                lincombs = c(lc.all.1.shared, lc.all.2))
     starttime <- Sys.time()
     # simulating posterior dist and do CV calculations for each model

@@ -19,6 +19,13 @@ library(ggpubr)
 
 # load and format data ####
 load("/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/haz-waz-kenDHS2014.rda")
+prop_urban <- read_rds("/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/admin1_2014_urban_frac.rds")
+
+# format prop urban data
+admin_df <- dat_c %>% select(admin1.name, admin1) %>% distinct()
+prop_urban %<>% left_join(admin_df, 
+                          by = c("adm_name" = "admin1.name")) %>%
+    select(admin1, urb_frac)
 
 ## reformat data into long form
 results.long <- dat_c %>% select(admin1, admin1.name, admin1.char,
@@ -246,10 +253,32 @@ for (i in 1:length(model_names)) {
     }
     
     # output for region-level samples
-    model_results[[ model_names[i] ]]$samples_region_ests <- list()
-    model_results[[ model_names[i] ]]$samples_region_ests$probs_urban <- probs_urban
-    model_results[[ model_names[i] ]]$samples_region_ests$probs_rural <- probs_rural
+    model_results[[ model_names[i] ]]$samples_region_ur <- list()
+    model_results[[ model_names[i] ]]$samples_region_ur$probs_urban <- probs_urban
+    model_results[[ model_names[i] ]]$samples_region_ur$probs_rural <- probs_rural
     
+    # aggregate over urban/rural
+    # aggregate over urban/rural
+    fitted_none_mat <- matrix(NA, nrow = n_regions, ncol = nsamps)
+    fitted_modern_mat <- matrix(NA, nrow = n_regions, ncol = nsamps)
+    fitted_other_mat <- matrix(NA, nrow = n_regions, ncol = nsamps)
+    
+    for (s in 1:nsamps)  {
+        fitted_none_mat[, s] <- (probs_urban[1, , s] * prop_urban$urb_frac) + 
+            (probs_rural[1, , s] * (1 - prop_urban$urb_frac))
+        fitted_modern_mat[, s] <- (probs_urban[2, , s] * prop_urban$urb_frac) + 
+            (probs_rural[2, , s] * (1 - prop_urban$urb_frac))
+        fitted_other_mat[, s] <- (probs_urban[3, , s] * prop_urban$urb_frac) + 
+            (probs_rural[3, , s] * (1 - prop_urban$urb_frac))
+    }
+    
+    # store results
+    model_results[[ model_names[i] ]]$samples_final <- list()
+    model_results[[ model_names[i] ]]$samples_final$none <- fitted_none_mat
+    model_results[[ model_names[i] ]]$samples_final$modern <- fitted_modern_mat
+    model_results[[ model_names[i] ]]$samples_final$other <- fitted_other_mat
+    
+    # run time
     model_results[[ model_names[i] ]]$run_time <- Sys.time() - start_time
     
     # store full results

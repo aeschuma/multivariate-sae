@@ -135,6 +135,8 @@ cv_res <- tibble(model = rep(model_names, n_regions),
                  cpo = NA)
 
 for (r in 1:n_regions) {
+    message(paste0("region ", r))
+    
     starttime <- Sys.time()
     
     ## Hold out data ####
@@ -164,6 +166,8 @@ for (r in 1:n_regions) {
     mod_list <- vector(mode = "list", length = n_models)
     names(mod_list) <- model_names
     
+    message("Running models...")
+    
     mod_list$`IID nonshared` <- fitINLA(formula = formulas$`IID nonshared`, 
                                         data = tmp)
     mod_list$`BYM nonshared` <- fitINLA(formula = formulas$`BYM nonshared`, 
@@ -172,6 +176,8 @@ for (r in 1:n_regions) {
                                      data = tmp)
     mod_list$`BYM shared` <- fitINLA(formula = formulas$`BYM shared`, 
                                      data = tmp)
+    
+    message("Posterior sims + calculations...")
     
     # simulating posterior dist and do CV calculations for each model
     for (mm in 1:length(mod_list)) {
@@ -262,6 +268,7 @@ for (r in 1:n_regions) {
     
     endtime <- Sys.time()
     totaltime <- endtime - starttime
+    message(paste0("DONE! Time: ", totaltime, " min"))
 }
 
 # save results
