@@ -5,6 +5,16 @@
 # preamble ####
 rm(list = ls())
 
+## set the root depending on operating system
+root <- ifelse(Sys.info()[1]=="Darwin","~/",
+               ifelse(Sys.info()[1]=="Windows","P:/",
+                      ifelse(Sys.info()[1]=="Linux","/home/users/aeschuma/",
+                             stop("Unknown operating system"))))
+
+if (root ==  "/home/users/aeschuma/") {
+    setwd(paste0(root, "Desktop/survey_csmf/cross-validation"))
+}
+
 library(tidyverse)
 library(spdep)
 library(geosphere)
@@ -31,7 +41,7 @@ fitINLA <- function(formula, data) {
 
 
 # read and format data ####
-load("/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/haz-waz-kenDHS2014.rda")
+load(paste0(root,"Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/haz-waz-kenDHS2014.rda"))
 
 n_regions <- nrow(poly.adm1)
 
@@ -273,6 +283,11 @@ for (r in 1:n_regions) {
 
 # save results
 write_rds(cv_res, file = "../../../Dropbox/dissertation_2/survey-csmf/results/cv/cv_results-hazwaz-unitlevel.rds")
+
+# if on Box, copy to real dropbox
+if (root == "P:/") {
+    write_rds(cv_res, file = "C:/Users/aeschuma/Dropbox/dissertation_2/survey-csmf/results/cv/cv_results-hazwaz-unitlevel.rds")
+}
 
 # format
 cv_res %<>% mutate(model_factor = factor(model, levels = model_names))
