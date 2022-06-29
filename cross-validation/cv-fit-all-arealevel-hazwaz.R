@@ -249,7 +249,7 @@ cv_res <- tibble(model = rep(model_names, n_regions),
 for (r in 1:n_regions) {
     
     # region index
-    idx <- ((r)*2-1):(r*2)
+    idx <- data$admin1 == r
     
     ## Hold out data ####
     tmp <- data
@@ -264,19 +264,19 @@ for (r in 1:n_regions) {
                                          data = tmp, 
                                          lincombs = c(lc.all.haz.nonshared, lc.all.waz))
     mod_list$`Univariate BYM` <- fitINLA(formula = formula.univariate.bym, 
-                                         data = data, 
+                                         data = tmp, 
                                          lincombs = c(lc.all.haz.nonshared, lc.all.waz))
     mod_list$`Bivariate nonshared IID` <- fitINLA(formula = formula.bivariate.nonshared.iid, 
-                                                  data = data, 
+                                                  data = tmp, 
                                                   lincombs = c(lc.all.haz.nonshared, lc.all.waz))
     mod_list$`Bivariate nonshared BYM` <- fitINLA(formula = formula.bivariate.nonshared.bym, 
-                                                  data = data, 
+                                                  data = tmp, 
                                                   lincombs = c(lc.all.haz.nonshared, lc.all.waz))
     mod_list$`Bivariate shared IID` <- fitINLA(formula = formula.bivariate.shared.iid, 
-                                               data = data, 
+                                               data = tmp, 
                                                lincombs = c(lc.all.haz.shared, lc.all.waz))
     mod_list$`Bivariate shared BYM` <- fitINLA(formula = formula.bivariate.shared.bym, 
-                                               data = data, 
+                                               data = tmp, 
                                                lincombs = c(lc.all.haz.shared, lc.all.waz))
     starttime <- Sys.time()
     # simulating posterior dist and do CV calculations for each model
@@ -364,7 +364,7 @@ for (r in 1:n_regions) {
 }
 
 # save results
-write_rds(cv_res, file = "../../../Dropbox/dissertation_2/survey-csmf/results/cv/cv_results.rds")
+write_rds(cv_res, file = "../../../Dropbox/dissertation_2/survey-csmf/results/cv/cv_results-hazwaz-arealevel.rds")
 
 # format
 cv_res %<>% mutate(model_factor = factor(model, levels = model_names))

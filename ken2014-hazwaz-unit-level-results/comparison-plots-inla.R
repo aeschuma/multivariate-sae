@@ -154,15 +154,9 @@ twoway_comp_plot <- function(data, measure) {
 ## raw data 
 load("../../../Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/haz-waz-kenDHS2014.rda")
 
-## direct estimates (stage 1)
-stage_1_list <- read_rds("../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-hazwaz-stage-1.rds")
-results_direct <- stage_1_list$results
-n_regions <- nrow(results_direct)
-
-## stage 2 estimates (from inla)
-stage_2_list <- read_rds("../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-hazwaz-stage-2-inla-all.rds")
-stage_2_list[[7]] <- NULL
-n_stage_2_models <- length(stage_2_list)
+## model results
+fits <- read_rds("../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-unit-level/hazwaz/ken2014-unit-level-hazwaz-inla-fits.rds")
+posteriors <- read_rds("../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-unit-level/hazwaz/ken2014-unit-level-hazwaz-inla-posteriors.rds")
 
 # combine and format data ####
 

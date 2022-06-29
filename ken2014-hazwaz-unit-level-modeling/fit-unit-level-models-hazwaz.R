@@ -19,10 +19,17 @@ library(ggpubr)
 
 # load and format data ####
 load("/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/haz-waz-kenDHS2014.rda")
+prop_urban <- read_rds("/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/admin1_2014_urban_frac.rds")
+
+# format prop urban data
+admin_df <- dat %>% select(admin1.name, admin1) %>% distinct()
+prop_urban %<>% left_join(admin_df, 
+                          by = c("adm_name" = "admin1.name")) %>%
+    select(admin1, urb_frac)
 
 ## reformat data into long form
 results.long <- dat %>% select(admin1, admin1.name, admin1.char,
-                               cluster, region, strata, rural, v002, v003,
+                               cluster, region, strata, rural, weights,
                                HAZ, WAZ) %>%
     pivot_longer(cols = c(HAZ, WAZ),
                  names_to = "outcome",
@@ -213,12 +220,28 @@ for (i in 1:length(model_names)) {
     fitted_waz_rural_mat <- waz_rural_fe_tot_mat[rep(1,n_regions),] + waz_re_tot_mat
     
     # output for region-level samples
-    model_results[[ model_names[i] ]]$samples_region_ests <- list()
-    model_results[[ model_names[i] ]]$samples_region_ests$haz_urban <- fitted_haz_urban_mat
-    model_results[[ model_names[i] ]]$samples_region_ests$waz_urban <- fitted_waz_urban_mat
-    model_results[[ model_names[i] ]]$samples_region_ests$haz_rural <- fitted_haz_rural_mat
-    model_results[[ model_names[i] ]]$samples_region_ests$waz_rural <- fitted_waz_rural_mat
+    model_results[[ model_names[i] ]]$samples_region_ur <- list()
+    model_results[[ model_names[i] ]]$samples_region_ur$haz_urban <- fitted_haz_urban_mat
+    model_results[[ model_names[i] ]]$samples_region_ur$waz_urban <- fitted_waz_urban_mat
+    model_results[[ model_names[i] ]]$samples_region_ur$haz_rural <- fitted_haz_rural_mat
+    model_results[[ model_names[i] ]]$samples_region_ur$waz_rural <- fitted_waz_rural_mat
     
+    # aggregate over urban/rural
+    fitted_haz_mat <- matrix(NA, nrow = n_regions, ncol = nsamps)
+    fitted_waz_mat <- matrix(NA, nrow = n_regions, ncol = nsamps)
+    for (s in 1:nsamps)  {
+        fitted_haz_mat[, s] <- (fitted_haz_urban_mat[, s] * prop_urban$urb_frac) + 
+            (fitted_haz_rural_mat[, s] * (1 - prop_urban$urb_frac))
+        fitted_waz_mat[, s] <- (fitted_waz_urban_mat[, s] * prop_urban$urb_frac) + 
+            (fitted_waz_rural_mat[, s] * (1 - prop_urban$urb_frac))
+    }
+    
+    # store results
+    model_results[[ model_names[i] ]]$samples_final <- list()
+    model_results[[ model_names[i] ]]$samples_final$haz <- fitted_haz_mat
+    model_results[[ model_names[i] ]]$samples_final <- fitted_waz_mat
+    
+    # run time
     model_results[[ model_names[i] ]]$run_time <- Sys.time() - start_time
     
     # store full results

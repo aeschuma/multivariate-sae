@@ -15,10 +15,10 @@ testing <- FALSE
 ## define directories
 
 # working directory for code
-wd <- paste0(root,"Desktop/survey-csmf/stage-2-simulation")
+wd <- paste0(root,"Desktop/survey-csmf/unit-level-simulation")
 
 # directory to save results
-savedir <- paste0(root,"Dropbox/dissertation_2/survey-csmf/results/stage-2-simulation")
+savedir <- paste0(root,"Dropbox/dissertation_2/survey-csmf/results/unit-level-simulation")
 
 ## set directory
 setwd(paste0(savedir,"/tmp"))
@@ -75,7 +75,7 @@ for (rn in 1:length(run_numbers)) {
         
         # move results to the real dropbox if on Box
         if (root == "P:/") {
-            setwd("C:/Users/aeschuma/Dropbox/dissertation_2/survey-csmf/results/stage-2-simulation")
+            setwd("C:/Users/aeschuma/Dropbox/dissertation_2/survey-csmf/results/unit-level-simulation")
             save(results_comp, file = paste0("results_run-", run_number,".Rdata"))
         } 
     }
@@ -87,12 +87,12 @@ if (!testing) {
         # delete tmp files
         setwd(paste0(savedir,"/tmp"))
         sapply(c(resfiles), unlink)
-        setwd(paste0(savedir,"/../../out/stage-2-simulation"))
+        setwd(paste0(savedir,"/../../out/unit-level-simulation"))
         sapply(list.files(), unlink)
         
         # delete .pe and .po files
         setwd(root)
-        pe_po_files <- grep("s2sim_", list.files(), value = TRUE)
+        pe_po_files <- grep("ul_sim_", list.files(), value = TRUE)
         sapply(pe_po_files, unlink)
     } else if (root == "/home/users/aeschuma/") {
         
@@ -101,7 +101,7 @@ if (!testing) {
         system(paste0("rm -f ", tmp_del_res))
 
         # delete .pe and .po files
-        system("rm -f /home/users/aeschuma/s2sim_*")
+        system("rm -f /home/users/aeschuma/ul_sim_*")
     }
 }
 
