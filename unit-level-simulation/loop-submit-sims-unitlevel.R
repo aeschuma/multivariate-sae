@@ -49,7 +49,7 @@ dgm_to_run <- 1:7
 # dgm_to_run <- c(7)
 
 ## Simulation number
-number_of_sims <- 201
+number_of_sims <- 799
 
 ## loop and submit jobs
 running_total <- 0
@@ -66,7 +66,7 @@ for (a in dgm_to_run) {
         write.csv(run_info, "results-run-info-unitlevel.csv", row.names = FALSE)
     }
     
-    for (s in  1:number_of_sims) {
+    for (s in  (1:number_of_sims)+201) {
         running_total <- running_total + 1
         if (testing_script) {
             script <- "qsub-sims-unitlevel-TEST.sh"

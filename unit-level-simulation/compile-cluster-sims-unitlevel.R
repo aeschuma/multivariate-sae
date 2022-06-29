@@ -47,6 +47,7 @@ for (rn in 1:length(run_numbers)) {
 
     # compile results
     results <- readRDS(tmp.resfiles[1])
+    results$run_time <- NULL
     paramnames <- vector(mode = "list", length = length(results))
     measurenames <- vector(mode = "list", length = length(results))
     results_comp <- vector(mode = "list", length = length(results))
@@ -57,6 +58,7 @@ for (rn in 1:length(run_numbers)) {
     }    
     for (i in 1:length(tmp.resfiles)) {
         tmpres <- readRDS(tmp.resfiles[i])
+        tmpres$run_time <- NULL
         for (j in 1:length(tmpres)) {
             results[[j]][,,i] <- as.matrix(tmpres[[j]][, measurenames[[j]]])
         }
@@ -81,27 +83,27 @@ for (rn in 1:length(run_numbers)) {
     }
 }
 
-if (!testing) {
-
-    if (root == "P:/") {
-        # delete tmp files
-        setwd(paste0(savedir,"/tmp"))
-        sapply(c(resfiles), unlink)
-        setwd(paste0(savedir,"/../../out/unit-level-simulation"))
-        sapply(list.files(), unlink)
-        
-        # delete .pe and .po files
-        setwd(root)
-        pe_po_files <- grep("ul_sim_", list.files(), value = TRUE)
-        sapply(pe_po_files, unlink)
-    } else if (root == "/home/users/aeschuma/") {
-        
-        # delete tmp files
-        tmp_del_res <- paste0(savedir,"/tmp/results*")
-        system(paste0("rm -f ", tmp_del_res))
-
-        # delete .pe and .po files
-        system("rm -f /home/users/aeschuma/ul_sim_*")
-    }
-}
+# if (!testing) {
+# 
+#     if (root == "P:/") {
+#         # delete tmp files
+#         setwd(paste0(savedir,"/tmp"))
+#         sapply(c(resfiles), unlink)
+#         setwd(paste0(savedir,"/../../out/unit-level-simulation"))
+#         sapply(list.files(), unlink)
+#         
+#         # delete .pe and .po files
+#         setwd(root)
+#         pe_po_files <- grep("ul_sim_", list.files(), value = TRUE)
+#         sapply(pe_po_files, unlink)
+#     } else if (root == "/home/users/aeschuma/") {
+#         
+#         # delete tmp files
+#         tmp_del_res <- paste0(savedir,"/tmp/results*")
+#         system(paste0("rm -f ", tmp_del_res))
+# 
+#         # delete .pe and .po files
+#         system("rm -f /home/users/aeschuma/ul_sim_*")
+#     }
+# }
 
