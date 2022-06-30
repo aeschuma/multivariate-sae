@@ -22,10 +22,10 @@ library(haven)
 library(knitr)
 library(kableExtra)
 library(magrittr)
+library(survey)
 library(svyVGAM)
 library(mvtnorm)
 library(rgdal)
-library(bayesplot)
 library(INLA)
 library(viridis)
 library(classInt)
@@ -43,13 +43,24 @@ fitINLA <- function(formula, data) {
 # read and format data ####
 load(paste0(root,"Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/haz-waz-kenDHS2014.rda"))
 
-## reformat data into long form
+# collapse, counting numbers of obs in each cluster
+# add in 0 counts for clusters that don't havve obs
 results.long <- dat_c %>% select(admin1, admin1.name, admin1.char,
                                  cluster, region, strata, rural, weights,
                                  contraceptive) %>%
     group_by(admin1, admin1.name, admin1.char,
              cluster, region, strata, rural, contraceptive) %>%
     summarize(count = n(), weights = unique(weights)) %>%
+    ungroup() %>%
+    complete(nesting(strata, cluster), contraceptive,
+             fill = list(count = 0)) %>%
+    group_by(strata, cluster) %>%
+    mutate(admin1 = unique(admin1 %>% na.omit()), 
+           admin1.name = unique(admin1.name %>% na.omit()), 
+           admin1.char = unique(admin1.char %>% na.omit()), 
+           region = unique(region %>% na.omit()), 
+           rural = unique(rural %>% na.omit()), 
+           weights = unique(weights %>% na.omit())) %>% 
     ungroup()
 
 results.long$admin1.none<- ifelse(results.long$contraceptive == "none", results.long$admin1, NA)

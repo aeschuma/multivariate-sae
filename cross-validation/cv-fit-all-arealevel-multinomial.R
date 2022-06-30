@@ -22,19 +22,14 @@ library(haven)
 library(knitr)
 library(kableExtra)
 library(magrittr)
-library(rstan)
-library(cmdstanr)
 library(svyVGAM)
 library(mvtnorm)
 library(rgdal)
-library(bayesplot)
 library(INLA)
 library(viridis)
 library(classInt)
 library(gridExtra)
 library(ggpubr)
-library(loo)
-
 
 # functions ####
 fitINLA <- function(formula, data, lincombs) {
@@ -281,6 +276,10 @@ cv_res <- tibble(model = rep(model_names, n_regions),
 
 for (r in 1:n_regions) {
     
+    message(paste0("region ", r))
+    
+    starttime <- Sys.time()
+    
     # region index
     idx <- ((r)*2-1):(r*2)
     
@@ -288,6 +287,8 @@ for (r in 1:n_regions) {
     tmp <- data
     tmp$value[idx] <- NA
     y_true <- data$value[idx]
+    
+    message("Running models...")
     
     ## Fit models ####
     mod_list <- vector(mode = "list", length = n_models)
@@ -311,7 +312,9 @@ for (r in 1:n_regions) {
     mod_list$`Bivariate shared BYM` <- fitINLA(formula = formula.bivariate.shared.bym, 
                                                data = tmp, 
                                                lincombs = c(lc.all.1.shared, lc.all.2))
-    starttime <- Sys.time()
+    
+    message("Posterior sims + calculations...")
+    
     # simulating posterior dist and do CV calculations for each model
     for (mm in 1:length(mod_list)) {
         # sample from the posterior
@@ -394,6 +397,8 @@ for (r in 1:n_regions) {
     
     endtime <- Sys.time()
     totaltime <- endtime - starttime
+    
+    message(paste0("DONE! Time: ", totaltime, " min"))
 }
 
 # save results
@@ -422,7 +427,8 @@ ggarrange(plotlist = list(pit_beta1_plot, pit_beta2_plot), nrow = 1, labels = c(
 
 logCPOres <- cv_res %>% mutate(logcpo = log(cpo)) %>% 
     group_by(model_factor) %>% 
-    summarise(logCPO_num = round(-1 * sum(logcpo), 2))
+    summarise(logCPO_num = round(-1 * sum(logcpo), 2)) %>%
+    arrange(desc(logCPO_num))
 
 logCPOres$logCPO <- ifelse(logCPOres$logCPO_num == min(logCPOres$logCPO_num), 
                            paste0("\\textbf{", logCPOres$logCPO_num, "}"),

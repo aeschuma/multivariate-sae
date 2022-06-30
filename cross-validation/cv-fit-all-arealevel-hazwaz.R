@@ -253,6 +253,9 @@ cv_res <- tibble(model = rep(model_names, n_regions),
                  pit_waz = NA)
 
 for (r in 1:n_regions) {
+    starttime <- Sys.time()
+    
+    message(paste0("region ", r))
     
     # region index
     idx <- data$admin1 == r
@@ -261,6 +264,8 @@ for (r in 1:n_regions) {
     tmp <- data
     tmp$value[idx] <- NA
     y_true <- data$value[idx]
+    
+    message("Running models...")
     
     ## Fit models ####
     mod_list <- vector(mode = "list", length = n_models)
@@ -284,7 +289,9 @@ for (r in 1:n_regions) {
     mod_list$`Bivariate shared BYM` <- fitINLA(formula = formula.bivariate.shared.bym, 
                                                data = tmp, 
                                                lincombs = c(lc.all.haz.shared, lc.all.waz))
-    starttime <- Sys.time()
+    
+    message("Posterior sims + calculations...")
+    
     # simulating posterior dist and do CV calculations for each model
     for (mm in 1:length(mod_list)) {
         # sample from the posterior
@@ -367,6 +374,8 @@ for (r in 1:n_regions) {
     
     endtime <- Sys.time()
     totaltime <- endtime - starttime
+    
+    message(paste0("DONE! Time: ", totaltime, " min"))
 }
 
 # save results
@@ -382,12 +391,12 @@ cv_res %<>% mutate(model_factor = factor(model, levels = model_names))
 
 # make summary tables and plots
 pit_haz_plot <- ggplot(cv_res, aes(x = pit_haz)) +
-    geom_histogram() + 
+    geom_histogram(bins = 7) + 
     facet_wrap(~ model_factor, ncol = 2) +
     theme_light()
 
 pit_waz_plot <- ggplot(cv_res, aes(x = pit_waz)) +
-    geom_histogram() + 
+    geom_histogram(bins = 7) + 
     facet_wrap(~ model_factor, ncol = 2) +
     theme_light()
 
@@ -395,7 +404,8 @@ ggarrange(plotlist = list(pit_haz_plot, pit_waz_plot), nrow = 1, labels = c("HAZ
 
 logCPOres <- cv_res %>% mutate(logcpo = log(cpo)) %>% 
     group_by(model_factor) %>% 
-    summarise(logCPO_num = round(-1 * sum(logcpo), 2))
+    summarise(logCPO_num = round(-1 * sum(logcpo), 2)) %>%
+    arrange(desc(logCPO_num))
 
 logCPOres$logCPO <- ifelse(logCPOres$logCPO_num == min(logCPOres$logCPO_num), 
                            paste0("\\textbf{", logCPOres$logCPO_num, "}"),

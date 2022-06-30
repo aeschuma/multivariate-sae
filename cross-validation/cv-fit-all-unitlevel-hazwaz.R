@@ -294,7 +294,8 @@ cv_res %<>% mutate(model_factor = factor(model, levels = model_names))
 
 logCPOres <- cv_res %>% mutate(logcpo = log(cpo)) %>% 
     group_by(model_factor) %>% 
-    summarise(logCPO_num = round(-1 * sum(logcpo), 2))
+    summarise(logCPO_num = round(-1 * sum(logcpo), 2)) %>%
+    arrange(desc(logCCPO_num))
 
 logCPOres$logCPO <- ifelse(logCPOres$logCPO_num == min(logCPOres$logCPO_num), 
                            paste0("\\textbf{", logCPOres$logCPO_num, "}"),
