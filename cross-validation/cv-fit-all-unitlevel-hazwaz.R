@@ -139,12 +139,13 @@ formulas[["BYM shared"]] <- formula("Y ~ -1 + outcome + rural.haz + rural.waz +
                                         f(cluster.waz, model = 'iid', hyper = iid_prior)")
 
 # Cross validation ####
-n_samples <- 500
+n_samples <- 250
 cv_res <- tibble(model = rep(model_names, n_regions),
                  region = rep(1:n_regions, each = n_models),
                  cpo = NA)
 
 for (r in 1:n_regions) {
+
     message(paste0("region ", r))
     
     starttime <- Sys.time()
@@ -245,33 +246,41 @@ for (r in 1:n_regions) {
         fitted_haz_rural_mat <- haz_rural_fe_tot_mat[rep(1,n_regions),] + haz_re_tot_mat
         fitted_waz_rural_mat <- waz_rural_fe_tot_mat[rep(1,n_regions),] + waz_re_tot_mat
         
-        # densities for heldout region
-        gaus_haz_urban <- list(mean = mean(fitted_haz_urban_mat[r,]), 
-                            sd = sd(fitted_haz_urban_mat[r,]))
-        gaus_waz_urban <- list(mean = mean(fitted_waz_urban_mat[r,]), 
-                            sd = sd(fitted_waz_urban_mat[r,]))
-        gaus_haz_rural <- list(mean = mean(fitted_haz_rural_mat[r,]), 
-                            sd = sd(fitted_haz_rural_mat[r,]))
-        gaus_waz_rural <- list(mean = mean(fitted_waz_rural_mat[r,]), 
-                            sd = sd(fitted_waz_rural_mat[r,]))
+        # gaussian precisions
+        sd_haz <- unlist(lapply(samp,
+                                  function(s) 1/sqrt(s$hyperpar["Precision for the Gaussian observations"])))
+        sd_waz <- unlist(lapply(samp,
+                                function(s) 1/sqrt(s$hyperpar["Precision for the Gaussian observations[2]"])))
         
         # calculate CV results
         y_lik <- c()
         
-        for (i in 1:n_samples) {
-            y_lik <- c(y_lik, 
-                       dnorm(x = haz_urban_true, 
-                             mean = gaus_haz_urban$mean, 
-                             sd = gaus_haz_urban$sd),
-                       dnorm(x = waz_urban_true, 
-                             mean = gaus_waz_urban$mean, 
-                             sd = gaus_waz_urban$sd),
-                       dnorm(x = haz_rural_true, 
-                             mean = gaus_haz_rural$mean, 
-                             sd = gaus_haz_rural$sd),
-                       dnorm(x = waz_rural_true, 
-                             mean = gaus_waz_rural$mean, 
-                             sd = gaus_waz_rural$sd))
+        for (s in 1:n_samples) {
+            #  all urban regions can only get urban ests
+            if (!is.nan(haz_urban_true)) {
+                y_lik <- c(y_lik,
+                           dnorm(haz_urban_true, 
+                                 mean = fitted_haz_urban_mat[r, s],
+                                 sd = sd_haz[s]))
+            } 
+            if (!is.nan(waz_urban_true)) {
+                y_lik <- c(y_lik,
+                           dnorm(waz_urban_true, 
+                                 mean = fitted_waz_urban_mat[r, s],
+                                 sd = sd_waz[s]))
+            }
+            if (!is.nan(haz_rural_true)) {
+                y_lik <- c(y_lik,
+                           dnorm(haz_rural_true, 
+                                 mean = fitted_haz_rural_mat[r, s],
+                                 sd = sd_haz[s]))
+            } 
+            if (!is.nan(waz_rural_true)) {
+                y_lik <- c(y_lik,
+                           dnorm(waz_rural_true, 
+                                 mean = fitted_waz_rural_mat[r, s],
+                                 sd = sd_waz[s]))
+            }
         }
         cv_res[cv_res$model == model_names[mm] & cv_res$region == r, "cpo"] <- mean(y_lik)
     }
@@ -295,7 +304,7 @@ cv_res %<>% mutate(model_factor = factor(model, levels = model_names))
 logCPOres <- cv_res %>% mutate(logcpo = log(cpo)) %>% 
     group_by(model_factor) %>% 
     summarise(logCPO_num = round(-1 * sum(logcpo), 2)) %>%
-    arrange(desc(logCCPO_num))
+    arrange(desc(logCPO_num))
 
 logCPOres$logCPO <- ifelse(logCPOres$logCPO_num == min(logCPOres$logCPO_num), 
                            paste0("\\textbf{", logCPOres$logCPO_num, "}"),
