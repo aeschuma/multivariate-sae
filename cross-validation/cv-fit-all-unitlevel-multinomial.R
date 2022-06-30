@@ -144,7 +144,7 @@ formulas[["BYM shared"]] <- formula("count ~ -1 + contraceptive_factor * rural +
                                         f(cluster, model = 'iid', hyper = iid_prior)")
 
 # Cross validation ####
-n_samples <- 500
+n_samples <- 250
 cv_res <- tibble(model = rep(model_names, n_regions),
                  region = rep(1:n_regions, each = n_models),
                  cpo = NA)
@@ -282,33 +282,35 @@ for (r in 1:n_regions) {
         fitted_m_o_rural <- fitted_modern_rural_mat - fitted_other_rural_mat
         fitted_n_o_rural <- fitted_none_rural_mat - fitted_other_rural_mat
         
-        # densities for heldout region
-        gaus_m_o_urban <- list(mean = mean(fitted_m_o_urban[r,]), 
-                               sd = sd(fitted_m_o_urban[r,]))
-        gaus_n_o_urban <- list(mean = mean(fitted_n_o_urban[r,]), 
-                               sd = sd(fitted_n_o_urban[r,]))
-        gaus_m_o_rural <- list(mean = mean(fitted_m_o_rural[r,]), 
-                               sd = sd(fitted_m_o_rural[r,]))
-        gaus_n_o_rural <- list(mean = mean(fitted_n_o_rural[r,]), 
-                               sd = sd(fitted_n_o_rural[r,]))
-        
         # calculate CV results
         y_lik <- c()
         
-        for (i in 1:n_samples) {
-            y_lik <- c(y_lik, 
-                       dnorm(x = logit_m_o_urban_true, 
-                             mean = gaus_m_o_urban$mean, 
-                             sd = gaus_m_o_urban$sd),
-                       dnorm(x = logit_n_o_urban_true, 
-                             mean = gaus_n_o_urban$mean, 
-                             sd = gaus_n_o_urban$sd),
-                       dnorm(x = logit_m_o_rural_true, 
-                             mean = gaus_m_o_rural$mean, 
-                             sd = gaus_m_o_rural$sd),
-                       dnorm(x = logit_n_o_rural_true, 
-                             mean = gaus_n_o_rural$mean, 
-                             sd = gaus_n_o_rural$sd))
+        for (s in 1:n_samples) {
+            #  all urban regions can only get urban ests
+            if (!is.nan(haz_urban_true)) {
+                y_lik <- c(y_lik,
+                           dpois(haz_urban_true, 
+                                 mean = fitted_haz_urban_mat[r, s],
+                                 sd = sd_haz[s]))
+            } 
+            if (!is.nan(waz_urban_true)) {
+                y_lik <- c(y_lik,
+                           dnorm(waz_urban_true, 
+                                 mean = fitted_waz_urban_mat[r, s],
+                                 sd = sd_waz[s]))
+            }
+            if (!is.nan(haz_rural_true)) {
+                y_lik <- c(y_lik,
+                           dnorm(haz_rural_true, 
+                                 mean = fitted_haz_rural_mat[r, s],
+                                 sd = sd_haz[s]))
+            } 
+            if (!is.nan(waz_rural_true)) {
+                y_lik <- c(y_lik,
+                           dnorm(waz_rural_true, 
+                                 mean = fitted_waz_rural_mat[r, s],
+                                 sd = sd_waz[s]))
+            }
         }
         cv_res[cv_res$model == model_names[mm] & cv_res$region == r, "cpo"] <- mean(y_lik)
     }
