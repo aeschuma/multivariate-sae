@@ -174,18 +174,12 @@ for (r in 1:n_regions) {
     urban_tot_true <- none_urban_true + modern_urban_true + other_urban_true
     rural_tot_true <- none_rural_true + modern_rural_true + other_rural_true
     
-    none_urban_true <- weighted.mean(none_urban_true/urban_tot_true, none_urban_weights_true)
-    modern_urban_true <- weighted.mean(modern_urban_true/urban_tot_true, modern_urban_weights_true)
-    other_urban_true <- weighted.mean(other_urban_true/urban_tot_true, other_urban_weights_true)
-    none_rural_true <- weighted.mean(none_rural_true/rural_tot_true, none_rural_weights_true)
-    modern_rural_true <- weighted.mean(modern_rural_true/rural_tot_true, modern_rural_weights_true)
-    other_rural_true <- weighted.mean(other_rural_true/rural_tot_true, other_rural_weights_true)
-    
-    # logit transforms
-    logit_m_o_urban_true <- log(modern_urban_true/other_urban_true)
-    logit_n_o_urban_true <- log(none_urban_true/other_urban_true)
-    logit_m_o_rural_true <- log(modern_rural_true/other_rural_true)
-    logit_n_o_rural_true <- log(none_rural_true/other_rural_true)
+    none_urban_true <- ceiling(weighted.mean(none_urban_true/urban_tot_true, none_urban_weights_true) * sum(urban_tot_true))
+    modern_urban_true <- ceiling(weighted.mean(modern_urban_true/urban_tot_true, modern_urban_weights_true) * sum(urban_tot_true))
+    other_urban_true <- ceiling(weighted.mean(other_urban_true/urban_tot_true, other_urban_weights_true) * sum(urban_tot_true))
+    none_rural_true <- ceiling(weighted.mean(none_rural_true/rural_tot_true, none_rural_weights_true) * sum(rural_tot_true))
+    modern_rural_true <- ceiling(weighted.mean(modern_rural_true/rural_tot_true, modern_rural_weights_true) * sum(rural_tot_true))
+    other_rural_true <- ceiling(weighted.mean(other_rural_true/rural_tot_true, other_rural_weights_true) * sum(rural_tot_true))
     
     ## Fit models ####
     mod_list <- vector(mode = "list", length = n_models)
