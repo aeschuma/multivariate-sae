@@ -18,8 +18,8 @@ library(gridExtra)
 library(ggpubr)
 
 # load results run info
-res_run <- read_csv("results-run-info.csv")
-dgm_info <- read_csv("dgm-info.csv")
+res_run <- read_csv("results-run-info-unitlevel.csv")
+dgm_info <- read_csv("dgm-info-unitlevel.csv")
 model_names <- c("I",
                  "II",
                  "III", 
@@ -33,8 +33,10 @@ fs <- grep("results", list.files(dropbox_dir), value = TRUE)
 ## extract run number to name saved results
 run_numbers <- c()
 for (i in 1:length(fs)) {
+    tmprn <- regmatches(fs[i], regexec("results_run-\\s*(.*?)\\s*\\.Rdata", fs[i]))[[1]][2]
+    if (is.na(as.numeric(tmprn))) tmprn <- str_split(tmprn, "_")[[1]][1]
     run_numbers <- c(run_numbers,
-                     as.numeric(regmatches(fs[i], regexec("results_run-\\s*(.*?)\\s*\\.Rdata", fs[i]))[[1]][2]))
+                     as.numeric(tmprn))
 }
 
 run_numbers <- sort(run_numbers)
@@ -47,14 +49,15 @@ run_results <- vector(mode = "list", length = length(which_runs))
 for (i in 1:length(which_runs)) {
     # cat(paste(i, "\n"))
     run_number <- run_numbers[which_runs[i]]
-    myfile <- paste0("results_run-",run_number,".Rdata")
+    myfile <- grep(paste0("results_run-",run_number,"\\s*(.*?)\\s*"), fs, value = TRUE)
     load(paste0(dropbox_dir, "/", myfile))
     tmps[[i]] <- results_comp
     rm(results_comp)
     
     dgmnum <- res_run$dgm_number[res_run$run_number == run_number]
     
-    run_results[[i]] <- cbind(model = c(model_names[1], ""), tmps[[i]][[1]])
+    run_results[[i]] <- cbind(model = c(model_names[1], ""), 
+                              tmps[[i]][[1]][tmps[[i]][[1]]$param %in% c("HAZ latent means", "WAZ latent means"),])
     if (length(tmps[[i]]) > 1) {
         for (j in 2:length(tmps[[i]])) {
             # extract latent mean results
@@ -69,13 +72,13 @@ for (i in 1:length(which_runs)) {
 }
 
 write_rds(run_results, paste0(dropbox_dir, "/", "simulation-results-tables.rds"))
-write_rds(run_results, paste0(dropbox_dir, "/../proj-2-chapter-results/simulation-results-tables.rds"))
+write_rds(run_results, paste0(dropbox_dir, "/../proj-3-chapter-results/simulation-results-tables.rds"))
 
 # load tables
 for (i in 1:length(run_results)) {
-    run_results[[i]]$scenario <- i
-    run_results[[i]]$Model <- rep(c("O", "I", "II", "III", "IV", "V", "VI"), each = 2)
-    run_results[[i]]$Model <- factor(run_results[[i]]$Model, levels = c("O", "I", "II", "III", "IV", "V", "VI"))
+    run_results[[i]]$scenario <- run_results[[i]]$dgm
+    run_results[[i]]$Model <- rep(c("I", "II", "III", "IV"), each = 2)
+    run_results[[i]]$Model <- factor(run_results[[i]]$Model, levels = c("I", "II", "III", "IV"))
 }
 all_sim_tables <- do.call(rbind, run_results)
 
@@ -103,22 +106,28 @@ plotResults <- function(data, scenarios, measure, measure_name) {
         )
 }
 
-# graph scenarios 1-6
-p1 <- plotResults(data = all_sim_tables, scenarios = 1:6, measure = "mean_bias", measure_name = "Mean bias")
-p2 <- plotResults(data = all_sim_tables, scenarios = 1:6, measure = "mean_absolute_bias", measure_name = "Mean absolute bias")
-p3 <- plotResults(data = all_sim_tables, scenarios = 1:6, measure = "mean_coverage.95", measure_name = "95% coverage")
-p4 <- plotResults(data = all_sim_tables, scenarios = 1:6, measure = "mean_width.95", measure_name = "95% width")
+# graph scenarios 1-4
+p1 <- plotResults(data = all_sim_tables, scenarios = 1:4, measure = "mean_bias", measure_name = "Bias")
+p2 <- plotResults(data = all_sim_tables, scenarios = 1:4, measure = "mean_absolute_bias", measure_name = "Absolute bias")
+p3 <- plotResults(data = all_sim_tables, scenarios = 1:4, measure = "mean_variance", measure_name = "Variance")
+p4 <- plotResults(data = all_sim_tables, scenarios = 1:4, measure = "mean_mse", measure_name = "MSE")
+p5 <- plotResults(data = all_sim_tables, scenarios = 1:4, measure = "mean_coverage.95", measure_name = "95% coverage")
+p6 <- plotResults(data = all_sim_tables, scenarios = 1:4, measure = "mean_width.95", measure_name = "95% width")
 
-ggarrange(p1, p2, p3, p4, ncol = 1, nrow = 4, legend = "none")
-ggsave(paste0(dropbox_dir, "/../proj-2-chapter-results/simulation-results-graph-scenarios1thru6.pdf"), 
-       width = 8.5, height = 11)
+ggarrange(p1, p2, p3, p4, p5, p6, 
+          ncol = 2, nrow = 3, legend = "none")
+ggsave(paste0(dropbox_dir, "/../proj-3-chapter-results/simulation-results-graph-scenarios1thru4.pdf"), 
+       width = 8, height = 10)
 
-# graph scenarios 7-9
-p5 <- plotResults(data = all_sim_tables, scenarios = 7:9, measure = "mean_bias", measure_name = "Mean bias")
-p6 <- plotResults(data = all_sim_tables, scenarios = 7:9, measure = "mean_absolute_bias", measure_name = "Mean absolute bias")
-p7 <- plotResults(data = all_sim_tables, scenarios = 7:9, measure = "mean_coverage.95", measure_name = "95% coverage")
-p8 <- plotResults(data = all_sim_tables, scenarios = 7:9, measure = "mean_width.95", measure_name = "95% width")
+# graph scenarios 5-7
+p1b <- plotResults(data = all_sim_tables, scenarios = 5:7, measure = "mean_bias", measure_name = "Bias")
+p2b <- plotResults(data = all_sim_tables, scenarios = 5:7, measure = "mean_absolute_bias", measure_name = "Absolute bias")
+p3b <- plotResults(data = all_sim_tables, scenarios = 5:7, measure = "mean_variance", measure_name = "Variance")
+p4b <- plotResults(data = all_sim_tables, scenarios = 5:7, measure = "mean_mse", measure_name = "MSE")
+p5b <- plotResults(data = all_sim_tables, scenarios = 5:7, measure = "mean_coverage.95", measure_name = "95% coverage")
+p6b <- plotResults(data = all_sim_tables, scenarios = 5:7, measure = "mean_width.95", measure_name = "95% width")
 
-ggarrange(p5, p6, p7, p8, ncol = 1, nrow = 4, legend = "none")
-ggsave(paste0(dropbox_dir, "/../proj-2-chapter-results/simulation-results-graph-scenarios7thru9.pdf"), 
-       width = 8.5, height = 11)
+ggarrange(p1b, p2b, p3b, p4b, p5b, p6b, 
+          ncol = 2, nrow = 3, legend = "none")
+ggsave(paste0(dropbox_dir, "/../proj-3-chapter-results/simulation-results-graph-scenarios5thru7.pdf"), 
+       width = 8, height = 10)

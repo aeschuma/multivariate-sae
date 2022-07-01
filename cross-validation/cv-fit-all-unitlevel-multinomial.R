@@ -36,12 +36,19 @@ library(ggpubr)
 fitINLA <- function(formula, data) {
     inla(formula, data = data, 
          family = "poisson",
+         control.family = list(link = "log"),
+         control.predictor = list(link = 1),
          control.compute = list(config=T))
 }
 
 
 # read and format data ####
 load(paste0(root,"Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/haz-waz-kenDHS2014.rda"))
+
+dat_c$cont_factor <- factor(dat_c$contraceptive, 
+                            levels = c("none", 
+                                       "modern", 
+                                       "other"))
 
 # collapse, counting numbers of obs in each cluster
 # add in 0 counts for clusters that don't havve obs
@@ -143,47 +150,47 @@ formulas[["BYM shared"]] <- formula("count ~ -1 + contraceptive_factor * rural +
                                           fixed = FALSE, hyper = lambda_prior) +
                                         f(cluster, model = 'iid', hyper = iid_prior)")
 
+# survey object for calculating direct estimates
+my.svydesign <- survey::svydesign(ids = ~ cluster,
+                                  strata = ~ strata, nest = T, weights = ~weights,
+                                  data = dat_c)
+
+score_res <- expand_grid(model = model_names, region = 1:n_regions, rural = 0:1) %>% 
+    mutate(score = NA)
+
+mse_res <- expand_grid(model = model_names, region = 1:n_regions, rural = 0:1) %>% 
+    mutate(mse = NA)
+
 # Cross validation ####
 n_samples <- 250
-cv_res <- tibble(model = rep(model_names, n_regions),
-                 region = rep(1:n_regions, each = n_models),
-                 cpo = NA)
-
 for (r in 1:n_regions) {
+    
+    message(paste0("region ", r))
+
     starttime <- Sys.time()
     
     ## Hold out data ####
     tmp <- data
     tmp$count[tmp$admin1 == r] <- NA
     
-    # calculate true probabilities
-    none_urban_true <- data$count[data$admin1 == r & data$rural == 0 & data$contraceptive == "none"]
-    modern_urban_true <- data$count[data$admin1 == r & data$rural == 0 & data$contraceptive == "modern"]
-    other_urban_true <- data$count[data$admin1 == r & data$rural == 0 & data$contraceptive == "other"]
-    none_rural_true <- data$count[data$admin1 == r & data$rural == 1 & data$contraceptive == "none"]
-    modern_rural_true <- data$count[data$admin1 == r & data$rural == 1 & data$contraceptive == "modern"]
-    other_rural_true <- data$count[data$admin1 == r & data$rural == 1 & data$contraceptive == "other"]
+    # direct estimates for held out data
+    heldout_urban <- subset(my.svydesign, admin1 == r & rural == 0)
+    heldout_rural <- subset(my.svydesign, admin1 == r & rural == 1)
     
-    none_urban_weights_true <- data$weights[data$admin1 == r & data$rural == 0 & data$contraceptive == "none"]
-    modern_urban_weights_true <- data$weights[data$admin1 == r & data$rural == 0 & data$contraceptive == "modern"]
-    other_urban_weights_true <- data$weights[data$admin1 == r & data$rural == 0 & data$contraceptive == "other"]
-    none_rural_weights_true <- data$weights[data$admin1 == r & data$rural == 1 & data$contraceptive == "none"]
-    modern_rural_weights_true <- data$weights[data$admin1 == r & data$rural == 1 & data$contraceptive == "modern"]
-    other_rural_weights_true <- data$weights[data$admin1 == r & data$rural == 1 & data$contraceptive == "other"]
+    mod_urban <- svy_vglm(cont_factor ~ 1, design = heldout_urban, family = multinomial(refLevel = 3))
+    mod_rural <- svy_vglm(cont_factor ~ 1, design = heldout_rural, family = multinomial(refLevel = 3))
     
-    urban_tot_true <- none_urban_true + modern_urban_true + other_urban_true
-    rural_tot_true <- none_rural_true + modern_rural_true + other_rural_true
+    direct_logits_urban <- coef(mod_urban)
+    direct_logits_rural <- coef(mod_rural)
     
-    none_urban_true <- ceiling(weighted.mean(none_urban_true/urban_tot_true, none_urban_weights_true) * sum(urban_tot_true))
-    modern_urban_true <- ceiling(weighted.mean(modern_urban_true/urban_tot_true, modern_urban_weights_true) * sum(urban_tot_true))
-    other_urban_true <- ceiling(weighted.mean(other_urban_true/urban_tot_true, other_urban_weights_true) * sum(urban_tot_true))
-    none_rural_true <- ceiling(weighted.mean(none_rural_true/rural_tot_true, none_rural_weights_true) * sum(rural_tot_true))
-    modern_rural_true <- ceiling(weighted.mean(modern_rural_true/rural_tot_true, modern_rural_weights_true) * sum(rural_tot_true))
-    other_rural_true <- ceiling(weighted.mean(other_rural_true/rural_tot_true, other_rural_weights_true) * sum(rural_tot_true))
-    
+    V_urban <- vcov(mod_urban)
+    V_rural <- vcov(mod_rural)
+
     ## Fit models ####
     mod_list <- vector(mode = "list", length = n_models)
     names(mod_list) <- model_names
+    
+    message("Running models...")
     
     mod_list$`IID nonshared` <- fitINLA(formula = formulas$`IID nonshared`, 
                                         data = tmp)
@@ -194,6 +201,8 @@ for (r in 1:n_regions) {
     mod_list$`BYM shared` <- fitINLA(formula = formulas$`BYM shared`, 
                                      data = tmp)
     
+    message("Posterior sims + calculations...")
+    
     # simulating posterior dist and do CV calculations for each model
     for (mm in 1:length(mod_list)) {
         # sample from the posterior
@@ -201,34 +210,34 @@ for (r in 1:n_regions) {
         
         # process fitted values
         none_fe_idx <- which(rownames(samp[[1]]$latent) %in% c("contraceptive_factornone:1"))
-        none_fe_mat <- matrix(NA, nrow = length(none_fe_idx), ncol = nsamps)
+        none_fe_mat <- matrix(NA, nrow = length(none_fe_idx), ncol = n_samples)
         modern_fe_idx <- which(rownames(samp[[1]]$latent) %in% c("contraceptive_factormodern:1"))
-        modern_fe_mat <- matrix(NA, nrow = length(modern_fe_idx), ncol = nsamps)
+        modern_fe_mat <- matrix(NA, nrow = length(modern_fe_idx), ncol = n_samples)
         other_fe_idx <- which(rownames(samp[[1]]$latent) %in% c("contraceptive_factorother:1"))
-        other_fe_mat <- matrix(NA, nrow = length(other_fe_idx), ncol = nsamps)
+        other_fe_mat <- matrix(NA, nrow = length(other_fe_idx), ncol = n_samples)
         
         none_rural_fe_idx <- which(rownames(samp[[1]]$latent) %in% c("rural:1"))
-        none_rural_fe_mat <- matrix(NA, nrow = length(none_rural_fe_idx), ncol = nsamps)
+        none_rural_fe_mat <- matrix(NA, nrow = length(none_rural_fe_idx), ncol = n_samples)
         modern_rural_fe_idx <- which(rownames(samp[[1]]$latent) %in% c("contraceptive_factormodern:rural:1"))
-        modern_rural_fe_mat <- matrix(NA, nrow = length(modern_rural_fe_idx), ncol = nsamps)
+        modern_rural_fe_mat <- matrix(NA, nrow = length(modern_rural_fe_idx), ncol = n_samples)
         other_rural_fe_idx <- which(rownames(samp[[1]]$latent) %in% c("contraceptive_factorother:rural:1"))
-        other_rural_fe_mat <- matrix(NA, nrow = length(other_rural_fe_idx), ncol = nsamps)
+        other_rural_fe_mat <- matrix(NA, nrow = length(other_rural_fe_idx), ncol = n_samples)
         
         modern_re_idx <- rownames(samp[[1]]$latent) %>% str_detect("admin1\\.modern:") %>% which()
         none_re_idx <- rownames(samp[[1]]$latent) %>% str_detect("admin1\\.none:") %>% which()
-        modern_re_mat <- matrix(NA, nrow = length(modern_re_idx), ncol = nsamps)
-        none_re_mat <- matrix(NA, nrow = length(none_re_idx), ncol = nsamps)
+        modern_re_mat <- matrix(NA, nrow = length(modern_re_idx), ncol = n_samples)
+        none_re_mat <- matrix(NA, nrow = length(none_re_idx), ncol = n_samples)
         
-        if(!grepl("nonshared", model_names[i])) {
+        if(!grepl("nonshared", model_names[mm])) {
             shared_re_idx <- rownames(samp[[1]]$latent) %>% str_detect("admin1\\.none\\.2:") %>% which()
-            shared_re_mat <- matrix(NA, nrow = length(shared_re_idx), ncol = nsamps)
+            shared_re_mat <- matrix(NA, nrow = length(shared_re_idx), ncol = n_samples)
         } else {
             shared_re_idx <- integer(0)
-            shared_re_mat <- matrix(0, nrow = length(none_re_idx), ncol = nsamps)
+            shared_re_mat <- matrix(0, nrow = length(none_re_idx), ncol = n_samples)
         }
         
         # fill in sample matrices
-        for (s in 1:nsamps) {
+        for (s in 1:n_samples) {
             none_fe_mat[,s] <- samp[[s]]$latent[none_fe_idx]
             modern_fe_mat[,s] <- samp[[s]]$latent[modern_fe_idx]
             other_fe_mat[,s] <- samp[[s]]$latent[other_fe_idx]
@@ -237,18 +246,8 @@ for (r in 1:n_regions) {
             other_rural_fe_mat[,s] <- samp[[s]]$latent[other_rural_fe_idx]
             modern_re_mat[,s] <- samp[[s]]$latent[modern_re_idx]
             none_re_mat[,s] <- samp[[s]]$latent[none_re_idx]
-            if(!grepl("nonshared", model_names[i])) shared_re_mat[,s] <- samp[[s]]$latent[shared_re_idx]
+            if(!grepl("nonshared", model_names[mm])) shared_re_mat[,s] <- samp[[s]]$latent[shared_re_idx]
         }
-        
-        # # save sample matrices in list for output
-        # model_results[[ model_names[i] ]]$samples_all <- list()
-        # model_results[[ model_names[i] ]]$samples_all$haz_fe <- haz_fe_mat
-        # model_results[[ model_names[i] ]]$samples_all$waz_fe <- waz_fe_mat
-        # model_results[[ model_names[i] ]]$samples_all$haz_rural_fe <- haz_rural_fe_mat
-        # model_results[[ model_names[i] ]]$samples_all$waz_rural_fe <- waz_rural_fe_mat
-        # model_results[[ model_names[i] ]]$samples_all$haz_re <- haz_re_mat
-        # model_results[[ model_names[i] ]]$samples_all$waz_re <- waz_re_mat
-        # model_results[[ model_names[i] ]]$samples_all$shared_re <- shared_re_mat
         
         # obtain total effect for space - first half of bym2, or all of them for IID
         modern_re_tot_mat <- modern_re_mat[1:n_regions,]
@@ -276,64 +275,90 @@ for (r in 1:n_regions) {
         fitted_m_o_rural <- fitted_modern_rural_mat - fitted_other_rural_mat
         fitted_n_o_rural <- fitted_none_rural_mat - fitted_other_rural_mat
         
-        # calculate CV results
-        y_lik <- c()
+        # calculate score and mse results
+        y_lik_urban <- c()
+        y_lik_rural <- c()
+        sq_error_urban <- c()
+        sq_error_rural <- c()
         
         for (s in 1:n_samples) {
-            #  all urban regions can only get urban ests
-            if (!is.nan(haz_urban_true)) {
-                y_lik <- c(y_lik,
-                           dpois(haz_urban_true, 
-                                 mean = fitted_haz_urban_mat[r, s],
-                                 sd = sd_haz[s]))
-            } 
-            if (!is.nan(waz_urban_true)) {
-                y_lik <- c(y_lik,
-                           dnorm(waz_urban_true, 
-                                 mean = fitted_waz_urban_mat[r, s],
-                                 sd = sd_waz[s]))
-            }
-            if (!is.nan(haz_rural_true)) {
-                y_lik <- c(y_lik,
-                           dnorm(haz_rural_true, 
-                                 mean = fitted_haz_rural_mat[r, s],
-                                 sd = sd_haz[s]))
-            } 
-            if (!is.nan(waz_rural_true)) {
-                y_lik <- c(y_lik,
-                           dnorm(waz_rural_true, 
-                                 mean = fitted_waz_rural_mat[r, s],
-                                 sd = sd_waz[s]))
+            
+            post_mean_urban <- c(fitted_n_o_urban[r, s],
+                                 fitted_m_o_urban[r, s])
+            y_lik_urban <- c(y_lik_urban,
+                             dmvnorm(as.numeric(direct_logits_urban),
+                                     mean = post_mean_urban,
+                                     sigma = V_urban))
+            sq_error_urban <- c(sq_error_urban,
+                                (as.numeric(direct_logits_urban) - post_mean_urban)^2)
+            
+            #  completely urban regions can only get urban ests
+            if (!(r %in% c(28, 30))) {
+                post_mean_rural <- c(fitted_n_o_rural[r, s],
+                                     fitted_m_o_rural[r, s])
+                y_lik_rural <- c(y_lik_rural,
+                                 dmvnorm(as.numeric(direct_logits_rural),
+                                         mean = post_mean_rural,
+                                         sigma = V_rural))
+                sq_error_rural <- c(sq_error_rural,
+                                    (as.numeric(direct_logits_rural) - post_mean_rural)^2)
             }
         }
-        cv_res[cv_res$model == model_names[mm] & cv_res$region == r, "cpo"] <- mean(y_lik)
+        
+        score_res[score_res$model == model_names[mm] & score_res$region == r & score_res$rural == 0, "score"] <- -log(mean(y_lik_urban))
+        score_res[score_res$model == model_names[mm] & score_res$region == r & score_res$rural == 1, "score"] <- -log(mean(y_lik_rural))
+        mse_res[mse_res$model == model_names[mm] & mse_res$region == r & mse_res$rural == 0, "mse"] <- mean(sq_error_urban)
+        mse_res[mse_res$model == model_names[mm] & mse_res$region == r & mse_res$rural == 1, "mse"] <- mean(sq_error_rural)
     }
     
     endtime <- Sys.time()
     totaltime <- endtime - starttime
-    
     message(paste0("DONE! Time: ", totaltime, " min"))
 }
 
+# save the ones we want
+cv_res_list <- list(score = score_res,
+                    mse = mse_res)
+
 # save results
-write_rds(cv_res, file = "../../../Dropbox/dissertation_2/survey-csmf/results/cv/cv_results-multinomial-unitlevel.rds")
+write_rds(cv_res_list, file = "../../../Dropbox/dissertation_2/survey-csmf/results/cv/cv_results-multinomial-unitlevel.rds")
 
 # if on Box, copy to real dropbox
 if (root == "P:/") {
-    write_rds(cv_res, file = "C:/Users/aeschuma/Dropbox/dissertation_2/survey-csmf/results/cv/cv_results-multinomial-unitlevel.rds")
+    write_rds(cv_res_list, file = "C:/Users/aeschuma/Dropbox/dissertation_2/survey-csmf/results/cv/cv_results-multinomial-unitlevel.rds")
 }
 
 # format
-cv_res %<>% mutate(model_factor = factor(model, levels = model_names))
+cv_res <- vector(mode = "list", length = length(cv_res_list))
+names(cv_res) <- names(cv_res_list)
+for (i in 1:length(cv_res)) {
+    cv_res[[i]] <- cv_res_list[[i]] %>% mutate(model_factor = factor(model, levels = model_names))
+}
 
-logCPOres <- cv_res %>% mutate(logcpo = log(cpo)) %>% 
-    group_by(model_factor) %>% 
-    summarise(logCPO_num = round(-1 * sum(logcpo), 2))
+score_to_plot <- cv_res$score %>%
+    filter(!is.na(score)) %>%
+    group_by(model_factor) %>%
+    summarise(score = round(mean(score), 3)) %>%
+    arrange(desc(score))
+score_to_plot$score <- ifelse(score_to_plot$score == min(score_to_plot$score),
+                              paste0("\\textbf{", score_to_plot$score, "}"),
+                              as.character(score_to_plot$score))
 
-logCPOres$logCPO <- ifelse(logCPOres$logCPO_num == min(logCPOres$logCPO_num), 
-                           paste0("\\textbf{", logCPOres$logCPO_num, "}"),
-                           as.character(logCPOres$logCPO_num))
+mse_to_plot <- cv_res$mse %>%
+    filter(!is.na(mse)) %>%
+    group_by(model_factor) %>%
+    summarise(mse = round(mean(mse), 3)) %>%
+    arrange(desc(mse))
+mse_to_plot$mse <- ifelse(mse_to_plot$mse == min(mse_to_plot$mse),
+                          paste0("\\textbf{", mse_to_plot$mse, "}"),
+                          as.character(mse_to_plot$mse))
 
-logCPOres %>% select(model_factor, logCPO) %>%
-    kable(format = "markdown", caption = "Bivariate $-\\sum\\log(CPO)$ for each model. Bold indicates the best performing model",
-          col.names = c("Model", "$-\\sum\\log(CPO)$"))
+mse_to_plot %>%
+    select(model_factor, mse) %>%
+    kable(format = "markdown", caption = "MSE",
+          col.names = c("Model", "MSE"))
+
+score_to_plot %>%
+    select(model_factor, score) %>%
+    kable(format = "markdown", caption = "LogScore",
+          col.names = c("Model", "$LogScore$"))

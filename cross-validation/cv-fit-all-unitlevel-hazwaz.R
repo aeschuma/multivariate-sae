@@ -141,31 +141,20 @@ formulas[["BYM shared"]] <- formula("Y ~ -1 + outcome + rural.haz + rural.waz +
 # Cross validation ####
 n_samples <- 250
 
-cv_res_obs_likelihood_areamean_cpo <- tibble(model = rep(model_names, n_regions),
-                                            region = rep(1:n_regions, each = n_models),
-                                            cpo = NA)
-cv_res_directest_bivariate_posterior_areamean_cpo <- tibble(model = rep(model_names, n_regions),
-                                               region = rep(1:n_regions, each = n_models),
-                                               cpo = NA)
-cv_res_obs_areamean_mse_cpo <- tibble(model = rep(model_names, n_regions),
-                                      region = rep(1:n_regions, each = n_models),
-                                      cpo = NA)
-cv_res_directest_areamean_mse_cpo <- tibble(model = rep(model_names, n_regions),
-                                            region = rep(1:n_regions, each = n_models),
-                                            cpo = NA)
-cv_res_directest_areamean_bivariate_posterior <- tibble(model = rep(model_names, n_regions),
-                                                        region = rep(1:n_regions, each = n_models),
-                                                        cpo = NA)
-cv_res_obs_areamean_mse <- tibble(model = rep(model_names, n_regions),
-                                        region = rep(1:n_regions, each = n_models),
-                                        cpo = NA)
-cv_res_directest_areamean_mse <- tibble(model = rep(model_names, n_regions),
-                                          region = rep(1:n_regions, each = n_models),
-                                          cpo = NA)
+score_res <- expand_grid(model = model_names, region = 1:n_regions, rural = 0:1) %>% 
+    mutate(score = NA)
+
+mse_res <- expand_grid(model = model_names, region = 1:n_regions, rural = 0:1) %>% 
+    mutate(mse = NA)
+
+# in order to get direct estimates
+my.svydesign <- survey::svydesign(ids = ~ cluster,
+                                  strata = ~ strata, nest = T, weights = ~weights,
+                                  data = dat)
 
 # loop through regions to hold out, fit models, and do CV
-# for (r in 1:n_regions) {
-for (r in c(28, 30)) {
+for (r in 1:n_regions) {
+# for (r in c(28, 30)) {
         
     message(paste0("region ", r))
     
@@ -179,20 +168,15 @@ for (r in c(28, 30)) {
     
     tmp$Y <- cbind(tmp$value.haz, tmp$value.waz)
     
-    haz_obs_urban_true <- data$value.haz[data$admin1 == r & data$rural == 0 & !is.na(data$value.haz)]
-    waz_obs_urban_true <- data$value.waz[data$admin1 == r & data$rural == 0 & !is.na(data$value.waz)]
-    haz_obs_rural_true <- data$value.haz[data$admin1 == r & data$rural == 1 & !is.na(data$value.haz)] 
-    waz_obs_rural_true <- data$value.waz[data$admin1 == r & data$rural == 1 & !is.na(data$value.waz)] 
+    # direct estimates for held out data
+    heldout_urban <- subset(my.svydesign, admin1 == r & rural == 0)
+    heldout_rural <- subset(my.svydesign, admin1 == r & rural == 1)
     
-    haz_urban_weights <- data$weights[data$admin1 == r & data$rural == 0 & !is.na(data$value.haz)]
-    waz_urban_weights <- data$weights[data$admin1 == r & data$rural == 0 & !is.na(data$value.waz)]
-    haz_rural_weights <- data$weights[data$admin1 == r & data$rural == 1 & !is.na(data$value.haz)]
-    waz_rural_weights <- data$weights[data$admin1 == r & data$rural == 1 & !is.na(data$value.waz)]
+    means.svymean_urban <- svymean(~ HAZ + WAZ, heldout_urban)
+    means.svymean_rural <- svymean(~ HAZ + WAZ, heldout_rural)
     
-    haz_weighted_urban_true <- weighted.mean(haz_obs_urban_true, haz_urban_weights)
-    waz_weighted_urban_true <- weighted.mean(waz_obs_urban_true, waz_urban_weights)
-    haz_weighted_rural_true <- weighted.mean(haz_obs_rural_true, haz_rural_weights)
-    waz_weighted_rural_true <- weighted.mean(waz_obs_rural_true, waz_rural_weights)
+    vcov.svymean_urban <- vcov(means.svymean_urban)
+    vcov.svymean_rural <- vcov(means.svymean_rural)
     
     ## Fit models ####
     mod_list <- vector(mode = "list", length = n_models)
@@ -213,6 +197,7 @@ for (r in c(28, 30)) {
     
     # simulating posterior dist and do CV calculations for each model
     for (mm in 1:length(mod_list)) {
+        
         # sample from the posterior
         samp <- inla.posterior.sample(n = n_samples, mod_list[[mm]])
         
@@ -267,115 +252,40 @@ for (r in c(28, 30)) {
         fitted_haz_rural_mat <- haz_rural_fe_tot_mat[rep(1,n_regions),] + haz_re_tot_mat
         fitted_waz_rural_mat <- waz_rural_fe_tot_mat[rep(1,n_regions),] + waz_re_tot_mat
         
-        # gaussian precisions for observations
-        sd_haz <- unlist(lapply(samp,
-                                function(s) 1/sqrt(s$hyperpar["Precision for the Gaussian observations"])))
-        sd_waz <- unlist(lapply(samp,
-                                function(s) 1/sqrt(s$hyperpar["Precision for the Gaussian observations[2]"])))
-        
-        # bivariate posterior dists of area-strata means
-        post_mean_urban <- c(mean(fitted_haz_urban_mat[r,]), mean(fitted_waz_urban_mat[r,]))
-        post_sd_urban <- c(sd(fitted_haz_urban_mat[r,]), sd(fitted_waz_urban_mat[r,]))
-        post_corr_urban <- cor(fitted_haz_urban_mat[r,], fitted_waz_urban_mat[r,])
-        post_sigma_urban <- diag(post_sd_urban) %*% matrix(c(1, post_corr_urban, post_corr_urban, 1), nrow = 2) %*% diag(post_sd_urban) 
-        
-        post_mean_rural <- c(mean(fitted_haz_rural_mat[r,]), mean(fitted_waz_rural_mat[r,]))
-        post_sd_rural <- c(sd(fitted_haz_rural_mat[r,]), sd(fitted_waz_rural_mat[r,]))
-        post_corr_rural <- cor(fitted_haz_rural_mat[r,], fitted_waz_rural_mat[r,])
-        post_sigma_rural <- diag(post_sd_rural) %*% matrix(c(1, post_corr_rural, post_corr_rural, 1), nrow = 2) %*% diag(post_sd_rural) 
-        
-        # calculate CV results
-        
-        # makes sense, but it's not really a posterior predictive measure 
-        y_lik_directest_areamean_bivariate_posterior <- c(dmvnorm(c(haz_weighted_urban_true, waz_weighted_urban_true),
-                                                                  mean = post_mean_urban, sigma = post_sigma_urban))
-        
-        # doesn't really make sense
-        y_lik_obs_areamean_mse <- c((haz_obs_urban_true - post_mean_urban[1])^2,
-                                    (waz_obs_urban_true - post_mean_urban[2])^2)
-        
-        # makes sense, but no posterior distribution is used
-        y_lik_directest_areamean_mse <- c((haz_weighted_urban_true - post_mean_urban[1])^2,
-                                          (waz_weighted_urban_true - post_mean_urban[2])^2)
-        if (!(r %in% c(28, 30))) {
-            y_lik_directest_areamean_bivariate_posterior <- c(y_lik_directest_areamean_bivariate_posterior,
-                                                              dmvnorm(c(haz_weighted_rural_true, waz_weighted_rural_true),
-                                                                      mean = post_mean_rural, sigma = post_sigma_rural))
-            y_lik_obs_areamean_mse <- c(y_lik_obs_areamean_mse,
-                                        (haz_obs_rural_true - post_mean_rural[1])^2,
-                                        (waz_obs_rural_true - post_mean_rural[2])^2)
-            y_lik_directest_areamean_mse <- c(y_lik_directest_areamean_mse,
-                                              (haz_weighted_rural_true - post_mean_rural[1])^2,
-                                              (waz_weighted_rural_true - post_mean_rural[2])^2)
-        }         
-        
-        # kinda makes sense... if comparing to held out direct estimates is not good
-        y_lik_obs_likelihood_areamean_cpo <- c()
-        
-        # makes sense if direct estimate is ok to use for comparison
-        y_lik_directest_bivariate_posterior_areamean_cpo <- c()
-        
-        # if we want to use posterior distribution along with MSE, then these are good
-        y_lik_obs_areamean_mse_cpo <- c()
-        y_lik_directest_areamean_mse_cpo <- c()
+        # calculate score and mse results
+        y_lik_urban <- c()
+        y_lik_rural <- c()
+        sq_error_urban <- c()
+        sq_error_rural <- c()
         
         for (s in 1:n_samples) {
-            y_lik_obs_likelihood_areamean_cpo <- c(y_lik_obs_likelihood_areamean_cpo,
-                                                   dnorm(haz_obs_urban_true, 
-                                                         mean = fitted_haz_urban_mat[r, s],
-                                                         sd = sd_haz[s]),
-                                                   dnorm(waz_obs_urban_true, 
-                                                         mean = fitted_waz_urban_mat[r, s],
-                                                         sd = sd_waz[s]))
-            y_lik_directest_bivariate_posterior_areamean_cpo <- c(y_lik_directest_bivariate_posterior_areamean_cpo,
-                                                                  dmvnorm(c(haz_weighted_urban_true, waz_weighted_urban_true),
-                                                                          mean = c(fitted_haz_urban_mat[r, s],
-                                                                                   fitted_waz_urban_mat[r, s]), 
-                                                                          sigma = post_sigma_urban))
-            y_lik_obs_areamean_mse_cpo <- c(y_lik_obs_areamean_mse_cpo,
-                                            (haz_obs_urban_true - fitted_haz_urban_mat[r, s])^2,
-                                            (waz_obs_urban_true - fitted_waz_urban_mat[r, s])^2)
-            y_lik_directest_areamean_mse_cpo <- c(y_lik_directest_areamean_mse_cpo,
-                                                  (haz_weighted_urban_true - fitted_haz_urban_mat[r, s])^2,
-                                                  (waz_weighted_urban_true - fitted_waz_urban_mat[r, s])^2)
+            
+            post_mean_urban <- c(fitted_haz_urban_mat[r, s],
+                                 fitted_waz_urban_mat[r, s])
+            y_lik_urban <- c(y_lik_urban,
+                             dmvnorm(as.numeric(means.svymean_urban),
+                                     mean = post_mean_urban,
+                                     sigma = vcov.svymean_urban))
+            sq_error_urban <- c(sq_error_urban,
+                                (means.svymean_urban - post_mean_urban)^2)
             
             #  completely urban regions can only get urban ests
             if (!(r %in% c(28, 30))) {
-                y_lik_obs_likelihood_areamean_cpo <- c(y_lik_obs_likelihood_areamean_cpo,
-                                                       dnorm(haz_obs_rural_true, 
-                                                             mean = fitted_haz_rural_mat[r, s],
-                                                             sd = sd_haz[s]),
-                                                       dnorm(waz_obs_rural_true, 
-                                                             mean = fitted_waz_rural_mat[r, s],
-                                                             sd = sd_waz[s]))
-                y_lik_directest_bivariate_posterior_areamean_cpo <- c(y_lik_directest_bivariate_posterior_areamean_cpo,
-                                                                      dmvnorm(c(haz_weighted_rural_true, waz_weighted_rural_true),
-                                                                              mean = c(fitted_haz_rural_mat[r, s],
-                                                                                       fitted_waz_rural_mat[r, s]), 
-                                                                              sigma = post_sigma_rural))
-                y_lik_obs_areamean_mse_cpo <- c(y_lik_obs_areamean_mse_cpo,
-                                                (haz_obs_rural_true - fitted_haz_rural_mat[r, s])^2,
-                                                (waz_obs_rural_true - fitted_waz_rural_mat[r, s])^2)
-                y_lik_directest_areamean_mse_cpo <- c(y_lik_directest_areamean_mse_cpo,
-                                                      (haz_weighted_rural_true - fitted_haz_rural_mat[r, s])^2,
-                                                      (waz_weighted_rural_true - fitted_waz_rural_mat[r, s])^2)
+                post_mean_rural <- c(fitted_haz_rural_mat[r, s],
+                                     fitted_waz_rural_mat[r, s])
+                y_lik_rural <- c(y_lik_rural,
+                                 dmvnorm(as.numeric(means.svymean_rural),
+                                         mean = post_mean_rural,
+                                         sigma = vcov.svymean_rural))
+                sq_error_rural <- c(sq_error_rural,
+                                    (means.svymean_rural - post_mean_rural)^2)
             }
         }
         
-        cv_res_obs_likelihood_areamean_cpo[cv_res_obs_likelihood_areamean_cpo$model == model_names[mm] & cv_res_obs_likelihood_areamean_cpo$region == r, "cpo"] <- 
-            mean(y_lik_obs_likelihood_areamean_cpo)
-        cv_res_directest_bivariate_posterior_areamean_cpo[cv_res_directest_bivariate_posterior_areamean_cpo$model == model_names[mm] & cv_res_directest_bivariate_posterior_areamean_cpo$region == r, "cpo"] <- 
-            mean(y_lik_directest_bivariate_posterior_areamean_cpo)
-        cv_res_obs_areamean_mse_cpo[cv_res_obs_areamean_mse_cpo$model == model_names[mm] & cv_res_obs_areamean_mse_cpo$region == r, "cpo"] <- 
-            mean(y_lik_obs_areamean_mse_cpo)
-        cv_res_directest_areamean_mse_cpo[cv_res_directest_areamean_mse_cpo$model == model_names[mm] & cv_res_directest_areamean_mse_cpo$region == r, "cpo"] <- 
-            mean(y_lik_directest_areamean_mse_cpo)
-        cv_res_directest_areamean_bivariate_posterior[cv_res_directest_areamean_bivariate_posterior$model == model_names[mm] & cv_res_directest_areamean_bivariate_posterior$region == r, "cpo"] <- 
-            mean(y_lik_directest_areamean_bivariate_posterior)
-        cv_res_obs_areamean_mse[cv_res_obs_areamean_mse$model == model_names[mm] & cv_res_obs_areamean_mse$region == r, "cpo"] <- 
-            mean(y_lik_obs_areamean_mse)
-        cv_res_directest_areamean_mse[cv_res_directest_areamean_mse$model == model_names[mm] & cv_res_directest_areamean_mse$region == r, "cpo"] <- 
-            mean(y_lik_directest_areamean_mse)
+        score_res[score_res$model == model_names[mm] & score_res$region == r & score_res$rural == 0, "score"] <- -log(mean(y_lik_urban))
+        score_res[score_res$model == model_names[mm] & score_res$region == r & score_res$rural == 1, "score"] <- -log(mean(y_lik_rural))
+        mse_res[mse_res$model == model_names[mm] & mse_res$region == r & mse_res$rural == 0, "mse"] <- mean(sq_error_urban)
+        mse_res[mse_res$model == model_names[mm] & mse_res$region == r & mse_res$rural == 1, "mse"] <- mean(sq_error_rural)
     }
     
     endtime <- Sys.time()
@@ -384,44 +294,48 @@ for (r in c(28, 30)) {
 }
 
 # save the ones we want
-cv_res <- list(obs_likelihood_areamean_cpo = cv_res_obs_likelihood_areamean_cpo,
-               directest_bivariate_posterior_areamean_cpo = cv_res_directest_bivariate_posterior_areamean_cpo, 
-               obs_areamean_mse_cpo = cv_res_obs_areamean_mse_cpo,
-               directest_areamean_mse_cpo = cv_res_directest_areamean_mse_cpo,
-               directest_areamean_bivariate_posterior = cv_res_directest_areamean_bivariate_posterior,
-               obs_areamean_mse = cv_res_obs_areamean_mse,
-               directest_areamean_mse = cv_res_directest_areamean_mse)
+cv_res_list <- list(score = score_res,
+                    mse = mse_res)
 
 # save results
-write_rds(cv_res, file = "../../../Dropbox/dissertation_2/survey-csmf/results/cv/cv_results-hazwaz-unitlevel.rds")
+write_rds(cv_res_list, file = "../../../Dropbox/dissertation_2/survey-csmf/results/cv/cv_results-hazwaz-unitlevel.rds")
 
 # if on Box, copy to real dropbox
 if (root == "P:/") {
-    write_rds(cv_res, file = "C:/Users/aeschuma/Dropbox/dissertation_2/survey-csmf/results/cv/cv_results-hazwaz-unitlevel.rds")
+    write_rds(cv_res_list, file = "C:/Users/aeschuma/Dropbox/dissertation_2/survey-csmf/results/cv/cv_results-hazwaz-unitlevel.rds")
 }
 
 # format
+cv_res <- vector(mode = "list", length = length(cv_res_list))
+names(cv_res) <- names(cv_res_list)
 for (i in 1:length(cv_res)) {
-    cv_res[[i]] %<>% mutate(model_factor = factor(model, levels = model_names))
+    cv_res[[i]] <- cv_res_list[[i]] %>% mutate(model_factor = factor(model, levels = model_names))
 }
 
-logCPOres <- lapply(cv_res, 
-                    function(x) {
-                        x %<>% mutate(logcpo = log(cpo)) %>% 
-                        group_by(model_factor) %>% 
-                        summarise(logCPO_num = round(-1 * sum(logcpo), 2)) %>%
-                        arrange(desc(logCPO_num))
-                        
-                        x$logCPO <- ifelse(x$logCPO_num == min(x$logCPO_num), 
-                                           paste0("\\textbf{", x$logCPO_num, "}"),
-                                           as.character(x$logCPO_num))
-                        
-                        x
-                        })
+score_to_plot <- cv_res$score %>%
+    filter(!is.na(score)) %>%
+    group_by(model_factor) %>%
+    summarise(score = round(mean(score), 3)) %>%
+    arrange(desc(score))
+score_to_plot$score <- ifelse(score_to_plot$score == min(score_to_plot$score),
+                              paste0("\\textbf{", score_to_plot$score, "}"),
+                              as.character(score_to_plot$score))
 
-for (i in 1:length(logCPOres)) {
-    logCPOres[[i]] %>% select(model_factor, logCPO) %>%
-        kable(format = "markdown", caption = names(logCPOres)[i],
-              col.names = c("Model", "$-\\sum\\log(CPO)$")) %>%
-        print()
-}
+mse_to_plot <- cv_res$mse %>%
+    filter(!is.na(mse)) %>%
+    group_by(model_factor) %>%
+    summarise(mse = round(mean(mse), 3)) %>%
+    arrange(desc(mse))
+mse_to_plot$mse <- ifelse(mse_to_plot$mse == min(mse_to_plot$mse),
+                          paste0("\\textbf{", mse_to_plot$mse, "}"),
+                          as.character(mse_to_plot$mse))
+
+mse_to_plot %>%
+    select(model_factor, mse) %>%
+    kable(format = "markdown", caption = "MSE",
+          col.names = c("Model", "MSE"))
+
+score_to_plot %>%
+    select(model_factor, score) %>%
+    kable(format = "markdown", caption = "LogScore",
+          col.names = c("Model", "$LogScore$"))
