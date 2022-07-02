@@ -213,7 +213,7 @@ for (i in 1:length(sim_res)) {
             sim_res[[i]]$absolute_bias[sim_res[[i]]$param == tmp_param_name] <- mean(abs(restmp$`est_50%` - restmp$real_mean))
             sim_res[[i]]$relative_absolute_bias[sim_res[[i]]$param == tmp_param_name] <- mean(abs(restmp$`est_50%` - restmp$real_mean)/abs(restmp$real_mean))
             sim_res[[i]]$variance[sim_res[[i]]$param == tmp_param_name] <- mean(restmp$var)
-            sim_res[[i]]$mse[sim_res[[i]]$param == tmp_param_name] <- (sim_res[[i]]$bias[sim_res[[i]]$param == tmp_param_name])^2 + sim_res[[i]]$variance[sim_res[[i]]$param == tmp_param_name]
+            sim_res[[i]]$mse[sim_res[[i]]$param == tmp_param_name] <- mean((restmp$`est_50%` - restmp$real_mean)^2)
             sim_res[[i]]$coverage.80[sim_res[[i]]$param == tmp_param_name] <- mean((restmp$real_mean > restmp$`est_10%`) & (restmp$real_mean < restmp$`est_90%`))
             sim_res[[i]]$width.80[sim_res[[i]]$param == tmp_param_name] <- mean(restmp$`est_90%` - restmp$`est_10%`)
             sim_res[[i]]$coverage.95[sim_res[[i]]$param == tmp_param_name] <- mean((restmp$real_mean > restmp$`est_2.5%`) & (restmp$real_mean < restmp$`est_97.5%`))
@@ -226,7 +226,7 @@ for (i in 1:length(sim_res)) {
         #     sim_res[[i]]$bias[sim_res[[i]]$param == tmp_param_name] <- mod_summary[[i]]$pct50[idx] - tmp_param
         #     sim_res[[i]]$absolute_bias[sim_res[[i]]$param == tmp_param_name] <- abs(mod_summary[[i]]$pct50[idx] - tmp_param)
         #     sim_res[[i]]$relative_absolute_bias[sim_res[[i]]$param == tmp_param_name] <- abs(mod_summary[[i]]$pct50[idx] - tmp_param)/abs(tmp_param)
-        #     sim_res[[i]]$variance[sim_res[[i]]$param == tmp_param_name] <- mod_summary[[i]]$var[idx] - tmp_param
+        #     sim_res[[i]]$variance[sim_res[[i]]$param == tmp_param_name] <- mod_summary[[i]]$var[idx]
         #     sim_res[[i]]$mse[sim_res[[i]]$param == tmp_param_name] <- (sim_res[[i]]$bias[sim_res[[i]]$param == tmp_param_name])^2 + sim_res[[i]]$var[sim_res[[i]]$param == tmp_param_name]
         #     sim_res[[i]]$coverage.80[sim_res[[i]]$param == tmp_param_name] <- (tmp_param > mod_summary[[i]]$pct10[idx]) & (tmp_param < mod_summary[[i]]$pct90[idx])
         #     sim_res[[i]]$width.80[sim_res[[i]]$param == tmp_param_name] <- mod_summary[[i]]$pct90[idx] - mod_summary[[i]]$pct10[idx]

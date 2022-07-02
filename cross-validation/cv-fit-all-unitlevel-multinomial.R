@@ -163,8 +163,9 @@ mse_res <- expand_grid(model = model_names, region = 1:n_regions, rural = 0:1) %
 
 # Cross validation ####
 n_samples <- 250
-for (r in 1:n_regions) {
-    
+# for (r in 1:n_regions) {
+for (r in 28:n_regions) {
+
     message(paste0("region ", r))
 
     starttime <- Sys.time()
@@ -177,14 +178,14 @@ for (r in 1:n_regions) {
     heldout_urban <- subset(my.svydesign, admin1 == r & rural == 0)
     heldout_rural <- subset(my.svydesign, admin1 == r & rural == 1)
     
-    mod_urban <- svy_vglm(cont_factor ~ 1, design = heldout_urban, family = multinomial(refLevel = 3))
-    mod_rural <- svy_vglm(cont_factor ~ 1, design = heldout_rural, family = multinomial(refLevel = 3))
-    
+    mod_urban <- svy_vglm(cont_factor ~ 1, design = heldout_urban, family = multinomial(refLevel = 1))
     direct_logits_urban <- coef(mod_urban)
-    direct_logits_rural <- coef(mod_rural)
-    
     V_urban <- vcov(mod_urban)
-    V_rural <- vcov(mod_rural)
+    if (!(r %in% c(28, 30))) {
+        mod_rural <- svy_vglm(cont_factor ~ 1, design = heldout_rural, family = multinomial(refLevel = 1))
+        direct_logits_rural <- coef(mod_rural)
+        V_rural <- vcov(mod_rural)
+    }
 
     ## Fit models ####
     mod_list <- vector(mode = "list", length = n_models)
@@ -270,10 +271,10 @@ for (r in 1:n_regions) {
         fitted_other_rural_mat <- other_rural_fe_tot_mat[rep(1,n_regions),]
         
         # differences in fitted estimates = logits
-        fitted_m_o_urban <- fitted_modern_urban_mat - fitted_other_urban_mat
-        fitted_n_o_urban <- fitted_none_urban_mat - fitted_other_urban_mat
-        fitted_m_o_rural <- fitted_modern_rural_mat - fitted_other_rural_mat
-        fitted_n_o_rural <- fitted_none_rural_mat - fitted_other_rural_mat
+        fitted_m_n_urban <- fitted_modern_urban_mat - fitted_none_urban_mat
+        fitted_o_n_urban <- fitted_other_urban_mat - fitted_none_urban_mat
+        fitted_m_n_rural <- fitted_modern_rural_mat - fitted_none_rural_mat
+        fitted_o_n_rural <- fitted_other_rural_mat - fitted_none_rural_mat
         
         # calculate score and mse results
         y_lik_urban <- c()
@@ -283,25 +284,28 @@ for (r in 1:n_regions) {
         
         for (s in 1:n_samples) {
             
-            post_mean_urban <- c(fitted_n_o_urban[r, s],
-                                 fitted_m_o_urban[r, s])
-            y_lik_urban <- c(y_lik_urban,
-                             dmvnorm(as.numeric(direct_logits_urban),
-                                     mean = post_mean_urban,
-                                     sigma = V_urban))
-            sq_error_urban <- c(sq_error_urban,
-                                (as.numeric(direct_logits_urban) - post_mean_urban)^2)
-            
+            if (length(direct_logits_urban) != 1) {
+                post_mean_urban <- c(fitted_m_n_urban[r, s],
+                                     fitted_o_n_urban[r, s])
+                y_lik_urban <- c(y_lik_urban,
+                                 dmvnorm(as.numeric(direct_logits_urban),
+                                         mean = post_mean_urban,
+                                         sigma = V_urban))
+                sq_error_urban <- c(sq_error_urban,
+                                    (as.numeric(direct_logits_urban) - post_mean_urban)^2)
+            }
             #  completely urban regions can only get urban ests
             if (!(r %in% c(28, 30))) {
-                post_mean_rural <- c(fitted_n_o_rural[r, s],
-                                     fitted_m_o_rural[r, s])
-                y_lik_rural <- c(y_lik_rural,
-                                 dmvnorm(as.numeric(direct_logits_rural),
-                                         mean = post_mean_rural,
-                                         sigma = V_rural))
-                sq_error_rural <- c(sq_error_rural,
-                                    (as.numeric(direct_logits_rural) - post_mean_rural)^2)
+                if (length(direct_logits_rural) != 1) {
+                    post_mean_rural <- c(fitted_m_n_rural[r, s],
+                                         fitted_o_n_rural[r, s])
+                    y_lik_rural <- c(y_lik_rural,
+                                     dmvnorm(as.numeric(direct_logits_rural),
+                                             mean = post_mean_rural,
+                                             sigma = V_rural))
+                    sq_error_rural <- c(sq_error_rural,
+                                        (as.numeric(direct_logits_rural) - post_mean_rural)^2)
+                }
             }
         }
         

@@ -412,18 +412,18 @@ if (root == "P:/") {
 # format
 cv_res %<>% mutate(model_factor = factor(model, levels = model_names))
 
-# make summary tables and plots
-pit_beta1_plot <- ggplot(cv_res, aes(x = pit_beta1)) +
-    geom_histogram() + 
-    facet_wrap(~ model_factor, ncol = 2) +
-    theme_light()
-
-pit_beta2_plot <- ggplot(cv_res, aes(x = pit_beta2)) +
-    geom_histogram() + 
-    facet_wrap(~ model_factor, ncol = 2) +
-    theme_light()
-
-ggarrange(plotlist = list(pit_beta1_plot, pit_beta2_plot), nrow = 1, labels = c("beta1", "beta2"))
+# # make summary tables and plots
+# pit_beta1_plot <- ggplot(cv_res, aes(x = pit_beta1)) +
+#     geom_histogram() + 
+#     facet_wrap(~ model_factor, ncol = 2) +
+#     theme_light()
+# 
+# pit_beta2_plot <- ggplot(cv_res, aes(x = pit_beta2)) +
+#     geom_histogram() + 
+#     facet_wrap(~ model_factor, ncol = 2) +
+#     theme_light()
+# 
+# ggarrange(plotlist = list(pit_beta1_plot, pit_beta2_plot), nrow = 1, labels = c("beta1", "beta2"))
 
 logCPOres <- cv_res %>% mutate(logcpo = log(cpo)) %>% 
     group_by(model_factor) %>% 
