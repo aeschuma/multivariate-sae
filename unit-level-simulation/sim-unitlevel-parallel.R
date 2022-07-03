@@ -110,82 +110,52 @@ parnames <- c("beta[1]", "beta[2]",
               "sigma[1]", "sigma[2]", 
               "rho[1]", "rho[2]", 
               "lambda",
-              "sigma_epsilon[1]", "sigma_epsilon[2]")
+              "sigma_epsilon[1]", "sigma_epsilon[2]",
+              "gaussian_sd[1]", "gaussian_sd[2]")
 
 # summaries
-mod_summary <- tibble(params = parnames,
+mod_summary <- tibble(param = parnames,
                       pct2.5 = NA,
                       pct10 = NA,
                       pct50 = NA,
                       pct90 = NA,
-                      pct97.5 = NA,
-                      var = NA)
+                      pct97.5 = NA)
 mod_summary <- rep(list(mod_summary), length(inla.results))
 latent_mean_summary <- vector(mode = "list", length = length(inla.results))
+
 for (i in 1:length(inla.results))  {
     # message(paste0("Model ", names(mod_summary)[i]))
-    # 
+    hyperpar_names <- inla.results[[i]]$fit$summary.hyperpar %>% rownames()
+    
     # message("FEs")
-    # mod_summary[[i]][mod_summary[[i]]$params %in% c("beta[1]", "beta[2]", "gamma[1]", "gamma[2]"), c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- inla.results[[i]]$fit$summary.fixed[, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]
-    # mod_summary[[i]][mod_summary[[i]]$params %in% c("beta[1]", "beta[2]", "gamma[1]", "gamma[2]"), c("var")] <- inla.results[[i]]$fit$summary.fixed[, c("sd")]^2
-    # hyperpar_names <- rownames(inla.results[[i]]$fit$summary.hyperpar)
-    # 
+    mod_summary[[i]][mod_summary[[i]]$param %in% c("beta[1]", "beta[2]", "gamma[1]", "gamma[2]"), c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- inla.results[[i]]$fit$summary.fixed[, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]
+
     # message("REs")
-    # for(j in 1:length(hyperpar_names)) {
-    #     tmpname <- hyperpar_names[j]
-    #     if (str_detect(tmpname, "Precision")) {
-    #         prec_par <- which(names(inla.results[[i]]$fit$internal.marginals.hyperpar) == gsub("Precision", "Log precision", tmpname))
-    #         m.sd <- inla.tmarginal(function(x) sqrt(1/exp(x)),
-    #                                inla.results[[i]]$fit$internal.marginals.hyperpar[[prec_par]])
-    #         marg <- inla.zmarginal(m.sd, silent = TRUE)
-    #     }
-    #     if (tmpname == "Precision for admin1.haz") {
-    #         mod_summary[[i]][mod_summary[[i]]$params == "sigma[1]", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- rev(inla.results[[i]]$fit$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]^(-0.5))
-    #         mod_summary[[i]][mod_summary[[i]]$params == "sigma[1]", "var"] <- marg$sd^2
-    #     } else if (tmpname == "Precision for admin1.waz") {
-    #         mod_summary[[i]][mod_summary[[i]]$params == "sigma[2]", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- rev(inla.results[[i]]$fit$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]^(-0.5))
-    #         mod_summary[[i]][mod_summary[[i]]$params == "sigma[2]", "var"] <- marg$sd^2
-    #     } else if (tmpname == "Phi for admin1.haz") {
-    #         mod_summary[[i]][mod_summary[[i]]$params == "rho[1]", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- inla.results[[i]]$fit$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]
-    #         mod_summary[[i]][mod_summary[[i]]$params == "rho[1]", "var"] <- inla.results[[i]]$fit$summary.hyperpar[tmpname, "sd"]^2
-    #     } else if (tmpname == "Phi for admin1.waz") {
-    #         mod_summary[[i]][mod_summary[[i]]$params == "rho[2]", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- inla.results[[i]]$fit$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]
-    #         mod_summary[[i]][mod_summary[[i]]$params == "rho[2]", "var"] <- inla.results[[i]]$fit$summary.hyperpar[tmpname, "sd"]^2
-    #     } else if (grepl("Beta", tmpname)) {
-    #         mod_summary[[i]][mod_summary[[i]]$params == "lambda", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- inla.results[[i]]$fit$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]
-    #         mod_summary[[i]][mod_summary[[i]]$params == "lambda", "var"] <- inla.results[[i]]$fit$summary.hyperpar[tmpname, "sd"]^2
-    #     } else if (tmpname == "Precision for cluster.haz") {
-    #         mod_summary[[i]][mod_summary[[i]]$params == "sigma_epsilon[1]", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- rev(inla.results[[i]]$fit$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]^(-0.5))
-    #         mod_summary[[i]][mod_summary[[i]]$params == "sigma_epsilon[1]", "var"] <- marg$sd^2
-    #     } else if (tmpname == "Precision for cluster.waz") {
-    #         mod_summary[[i]][mod_summary[[i]]$params == "sigma_epsilon[2]", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- rev(inla.results[[i]]$fit$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]^(-0.5))
-    #         mod_summary[[i]][mod_summary[[i]]$params == "sigma_epsilon[2]", "var"] <- marg$sd^2
-    #     } else if (tmpname == "Precision for the Gaussian observations") {
-    #         mod_summary[[i]][mod_summary[[i]]$params == "gaussian_sd[1]", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- rev(inla.results[[i]]$fit$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]^(-0.5))
-    #         mod_summary[[i]][mod_summary[[i]]$params == "gaussian_sd[1]", "var"] <- marg$sd^2
-    #     } else if (tmpname == "Precision for the Gaussian observations[2]") {
-    #         mod_summary[[i]][mod_summary[[i]]$params == "gaussian_sd[2]", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- rev(inla.results[[i]]$fit$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]^(-0.5))
-    #         mod_summary[[i]][mod_summary[[i]]$params == "gaussian_sd[2]", "var"] <- marg$sd^2
-    #     } 
-    # }
-    latent_mean_summary[[i]] <- inla.results[[i]]$latent_means
+    for(j in 1:length(hyperpar_names)) {
+        tmpname <- hyperpar_names[j]
+        if (tmpname == "Precision for admin1.haz") {
+            mod_summary[[i]][mod_summary[[i]]$param == "sigma[1]", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- rev(inla.results[[i]]$fit$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]^(-0.5))
+        } else if (tmpname == "Precision for admin1.waz") {
+            mod_summary[[i]][mod_summary[[i]]$param == "sigma[2]", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- rev(inla.results[[i]]$fit$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]^(-0.5))
+        } else if (tmpname == "Phi for admin1.haz") {
+            mod_summary[[i]][mod_summary[[i]]$param == "rho[1]", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- inla.results[[i]]$fit$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]
+        } else if (tmpname == "Phi for admin1.waz") {
+            mod_summary[[i]][mod_summary[[i]]$param == "rho[2]", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- inla.results[[i]]$fit$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]
+        } else if (grepl("Beta", tmpname)) {
+            mod_summary[[i]][mod_summary[[i]]$param == "lambda", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- inla.results[[i]]$fit$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]
+        } else if (tmpname == "Precision for cluster.haz") {
+            mod_summary[[i]][mod_summary[[i]]$param == "sigma_epsilon[1]", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- rev(inla.results[[i]]$fit$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]^(-0.5))
+        } else if (tmpname == "Precision for cluster.waz") {
+            mod_summary[[i]][mod_summary[[i]]$param == "sigma_epsilon[2]", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- rev(inla.results[[i]]$fit$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]^(-0.5))
+        } else if (tmpname == "Precision for the Gaussian observations") {
+            mod_summary[[i]][mod_summary[[i]]$param == "gaussian_sd[1]", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- rev(inla.results[[i]]$fit$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]^(-0.5))
+        } else if (tmpname == "Precision for the Gaussian observations[2]") {
+            mod_summary[[i]][mod_summary[[i]]$param == "gaussian_sd[2]", c("pct2.5", "pct10", "pct50","pct90","pct97.5")] <- rev(inla.results[[i]]$fit$summary.hyperpar[tmpname, c("0.025quant", "0.1quant", "0.5quant", "0.9quant", "0.975quant")]^(-0.5))
+        }
+    }
+    latent_mean_summary[[i]] <- inla.results[[i]]$latent_means %>%
+        mutate(param = paste0(outcome, "_", admin1, ".",  rural))
 }
-
-cat(paste("Calculate results for parameters \n"))
-
-# compile results
-sim_res <- data.frame(param = c(parnames, "HAZ latent means", "WAZ latent means"),
-                      bias = NA,
-                      absolute_bias = NA,
-                      relative_absolute_bias = NA,
-                      variance = NA,
-                      mse = NA,
-                      coverage.80 = NA,
-                      width.80 = NA,
-                      coverage.95 = NA,
-                      width.95 = NA)
-sim_res <- rep(list(sim_res), length(inla.results))
-names(sim_res) <- names(inla.results)
 
 # true latent means
 real_means <- simulated_data$latent_params %>% 
@@ -194,49 +164,59 @@ real_means <- simulated_data$latent_params %>%
     pivot_longer(cols = starts_with("admin1_rural_"),
                  names_prefix = "admin1_rural_",
                  names_to = "outcome",
-                 values_to = "real_mean")
+                 values_to = "real_mean") %>%
+    mutate(param = paste0(outcome, "_", admin1, ".",  rural))
 
-for (i in 1:length(sim_res)) {
-    for (j in 1:nrow(sim_res[[i]])) {
-        tmp_param_name <- sim_res[[i]]$param[j]
-        if (grepl("latent means", tmp_param_name)) {
-            restmp2 <- real_means %>% 
-                left_join(latent_mean_summary[[i]])
-            if (grepl("HAZ", tmp_param_name)) {
-                restmp <- restmp2 %>% 
-                    filter(outcome == "HAZ") 
-            } else {
-                restmp <- restmp2 %>% 
-                    filter(outcome == "WAZ") 
-            }    
-            sim_res[[i]]$bias[sim_res[[i]]$param == tmp_param_name] <- mean(restmp$`est_50%` - restmp$real_mean)
-            sim_res[[i]]$absolute_bias[sim_res[[i]]$param == tmp_param_name] <- mean(abs(restmp$`est_50%` - restmp$real_mean))
-            sim_res[[i]]$relative_absolute_bias[sim_res[[i]]$param == tmp_param_name] <- mean(abs(restmp$`est_50%` - restmp$real_mean)/abs(restmp$real_mean))
-            sim_res[[i]]$variance[sim_res[[i]]$param == tmp_param_name] <- mean(restmp$var)
-            sim_res[[i]]$mse[sim_res[[i]]$param == tmp_param_name] <- mean((restmp$`est_50%` - restmp$real_mean)^2)
-            sim_res[[i]]$coverage.80[sim_res[[i]]$param == tmp_param_name] <- mean((restmp$real_mean > restmp$`est_10%`) & (restmp$real_mean < restmp$`est_90%`))
-            sim_res[[i]]$width.80[sim_res[[i]]$param == tmp_param_name] <- mean(restmp$`est_90%` - restmp$`est_10%`)
-            sim_res[[i]]$coverage.95[sim_res[[i]]$param == tmp_param_name] <- mean((restmp$real_mean > restmp$`est_2.5%`) & (restmp$real_mean < restmp$`est_97.5%`))
-            sim_res[[i]]$width.95[sim_res[[i]]$param == tmp_param_name] <- mean(restmp$`est_97.5%` - restmp$`est_2.5%`)
-        } 
-        # else {
-        #     tmp_param <- simulated_data$params[tmp_param_name]
-        #     idx <- mod_summary[[i]]$params == tmp_param_name
-        #     
-        #     sim_res[[i]]$bias[sim_res[[i]]$param == tmp_param_name] <- mod_summary[[i]]$pct50[idx] - tmp_param
-        #     sim_res[[i]]$absolute_bias[sim_res[[i]]$param == tmp_param_name] <- abs(mod_summary[[i]]$pct50[idx] - tmp_param)
-        #     sim_res[[i]]$relative_absolute_bias[sim_res[[i]]$param == tmp_param_name] <- abs(mod_summary[[i]]$pct50[idx] - tmp_param)/abs(tmp_param)
-        #     sim_res[[i]]$variance[sim_res[[i]]$param == tmp_param_name] <- mod_summary[[i]]$var[idx]
-        #     sim_res[[i]]$mse[sim_res[[i]]$param == tmp_param_name] <- (sim_res[[i]]$bias[sim_res[[i]]$param == tmp_param_name])^2 + sim_res[[i]]$var[sim_res[[i]]$param == tmp_param_name]
-        #     sim_res[[i]]$coverage.80[sim_res[[i]]$param == tmp_param_name] <- (tmp_param > mod_summary[[i]]$pct10[idx]) & (tmp_param < mod_summary[[i]]$pct90[idx])
-        #     sim_res[[i]]$width.80[sim_res[[i]]$param == tmp_param_name] <- mod_summary[[i]]$pct90[idx] - mod_summary[[i]]$pct10[idx]
-        #     sim_res[[i]]$coverage.95[sim_res[[i]]$param == tmp_param_name] <- (tmp_param > mod_summary[[i]]$pct2.5[idx]) & (tmp_param < mod_summary[[i]]$pct97.5[idx])
-        #     sim_res[[i]]$width.95[sim_res[[i]]$param == tmp_param_name] <- mod_summary[[i]]$pct97.5[idx] - mod_summary[[i]]$pct2.5[idx]
-        # }
-    }
+cat(paste("Calculate results for parameters \n"))
+
+# compile results
+sim_res_latent_means <- tibble(param = real_means$param,
+                               truth = real_means$real_mean)
+sim_res_latent_means <- rep(list(sim_res_latent_means), length(inla.results))
+
+for (i in 1:length(sim_res_latent_means)) {
+    sim_res_latent_means[[i]] %<>% 
+        left_join(latent_mean_summary[[i]]) %>%
+        mutate(est = `est_50%`,
+               coverage.80 = (truth > `est_10%`) & (truth < `est_90%`),
+               width.80 = `est_90%` - `est_10%`,
+               coverage.95 = (truth > `est_2.5%`) & (truth < `est_97.5%`),
+               width.95 = `est_97.5%` - `est_2.5%`) %>%
+        select(param, truth, est, 
+               coverage.80, width.80, 
+               coverage.95, width.95)
 }
 
-sim_res$run_time <- Sys.time() - start_time
+# model parameters
+sim_res_par <- tibble(param = parnames,
+                      truth = simulated_data$params,
+                      est = NA,
+                      coverage.80 = NA,
+                      width.80 = NA,
+                      coverage.95 = NA,
+                      width.95 = NA)
+sim_res_par <- rep(list(sim_res_par), length(inla.results))
+
+for (i in 1:length(sim_res_par)) {
+    sim_res_par[[i]] %<>% 
+        left_join(mod_summary[[i]]) %>%
+        mutate(est = `pct50`,
+               coverage.80 = (truth > `pct10`) & (truth < `pct90`),
+               width.80 = `pct90` - `pct10`,
+               coverage.95 = (truth > `pct2.5`) & (truth < `pct97.5`),
+               width.95 = `pct97.5` - `pct2.5`) %>%
+        select(param, truth, est, 
+               coverage.80, width.80, 
+               coverage.95, width.95)
+}
+
+sim_res <- list()
+for (i in 1:length(sim_res_par)) {
+    sim_res[[i]] <- rbind(sim_res_par[[i]],
+                          sim_res_latent_means[[i]])
+}
+
+sim_mod_res$run_time <- Sys.time() - start_time
 
 # Save results ####
 cat(paste("Save results \n"))
