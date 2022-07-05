@@ -80,7 +80,7 @@ names(formulas) <- model_names
 
 formulas[["IID nonshared"]] <- formula("count ~ -1 + contraceptive_factor + rural.none + rural.modern + rural.other + 
                                         f(admin1.modern, model = 'iid', hyper = iid_prior) +
-                                        f(admin1.none, model = 'iid', hyper = iid_prior) +
+                                        f(admin1.other, model = 'iid', hyper = iid_prior) +
                                         f(cluster, model = 'iid', hyper = iid_prior)")
 
 formulas[["BYM nonshared"]] <- formula("count ~ -1 + contraceptive_factor + rural.none + rural.modern + rural.other + 
@@ -89,7 +89,7 @@ formulas[["BYM nonshared"]] <- formula("count ~ -1 + contraceptive_factor + rura
                                              scale.model = T, 
                                              constr = T,
                                              hyper = bym2_prior) +
-                                        f(admin1.none, model = 'bym2',
+                                        f(admin1.other, model = 'bym2',
                                               graph = admin1.mat, 
                                               scale.model = T, 
                                               constr = T,
@@ -97,8 +97,8 @@ formulas[["BYM nonshared"]] <- formula("count ~ -1 + contraceptive_factor + rura
                                         f(cluster, model = 'iid', hyper = iid_prior)")
 formulas[["IID shared"]] <- formula("count ~ -1 + contraceptive_factor + rural.none + rural.modern + rural.other +
                                         f(admin1.modern, model = 'iid', hyper = iid_prior) +
-                                        f(admin1.none, model = 'iid', hyper = iid_prior) +
-                                        f(admin1.none.2, copy = \"admin1.modern\", 
+                                        f(admin1.other, model = 'iid', hyper = iid_prior) +
+                                        f(admin1.other.2, copy = \"admin1.modern\", 
                                           fixed = FALSE, hyper = lambda_prior) +
                                         f(cluster, model = 'iid', hyper = iid_prior)")
 formulas[["BYM shared"]] <- formula("count ~ -1 + contraceptive_factor + rural.none + rural.modern + rural.other + 
@@ -107,12 +107,12 @@ formulas[["BYM shared"]] <- formula("count ~ -1 + contraceptive_factor + rural.n
                                              scale.model = T, 
                                              constr = T,
                                              hyper = bym2_prior) +
-                                        f(admin1.none, model = 'bym2',
+                                        f(admin1.other, model = 'bym2',
                                               graph = admin1.mat, 
                                               scale.model = T, 
                                               constr = T,
                                               hyper = bym2_prior) +
-                                        f(admin1.none.2, copy = \"admin1.modern\", 
+                                        f(admin1.other.2, copy = \"admin1.modern\", 
                                           fixed = FALSE, hyper = lambda_prior) +
                                         f(cluster, model = 'iid', hyper = iid_prior)")
 
@@ -172,16 +172,16 @@ for (i in 1:length(model_names)) {
     other_rural_fe_mat <- matrix(NA, nrow = length(other_rural_fe_idx), ncol = nsamps)
     
     modern_re_idx <- rownames(samp[[1]]$latent) %>% str_detect("admin1\\.modern:") %>% which()
-    none_re_idx <- rownames(samp[[1]]$latent) %>% str_detect("admin1\\.none:") %>% which()
+    other_re_idx <- rownames(samp[[1]]$latent) %>% str_detect("admin1\\.other:") %>% which()
     modern_re_mat <- matrix(NA, nrow = length(modern_re_idx), ncol = nsamps)
-    none_re_mat <- matrix(NA, nrow = length(none_re_idx), ncol = nsamps)
+    other_re_mat <- matrix(NA, nrow = length(other_re_idx), ncol = nsamps)
     
     if(!grepl("nonshared", model_names[i])) {
-        shared_re_idx <- rownames(samp[[1]]$latent) %>% str_detect("admin1\\.none\\.2:") %>% which()
+        shared_re_idx <- rownames(samp[[1]]$latent) %>% str_detect("admin1\\.other\\.2:") %>% which()
         shared_re_mat <- matrix(NA, nrow = length(shared_re_idx), ncol = nsamps)
     } else {
         shared_re_idx <- integer(0)
-        shared_re_mat <- matrix(0, nrow = length(none_re_idx), ncol = nsamps)
+        shared_re_mat <- matrix(0, nrow = length(other_re_idx), ncol = nsamps)
     }
 
     # fill in sample matrices
@@ -193,25 +193,23 @@ for (i in 1:length(model_names)) {
         modern_rural_fe_mat[,s] <- samp[[s]]$latent[modern_rural_fe_idx]
         other_rural_fe_mat[,s] <- samp[[s]]$latent[other_rural_fe_idx]
         modern_re_mat[,s] <- samp[[s]]$latent[modern_re_idx]
-        none_re_mat[,s] <- samp[[s]]$latent[none_re_idx]
+        other_re_mat[,s] <- samp[[s]]$latent[other_re_idx]
         if(!grepl("nonshared", model_names[i])) shared_re_mat[,s] <- samp[[s]]$latent[shared_re_idx]
     }
     
     # # save sample matrices in list for output
-    model_results[[ model_names[i] ]]$samples_all <- list()
-    model_results[[ model_names[i] ]]$samples_all$none_fe <- none_fe_mat
-    model_results[[ model_names[i] ]]$samples_all$modern_fe <- modern_fe_mat
-    model_results[[ model_names[i] ]]$samples_all$other_fe <- other_fe_mat
-    model_results[[ model_names[i] ]]$samples_all$none_rural_fe <- none_rural_fe_mat
-    model_results[[ model_names[i] ]]$samples_all$modern_rural_fe <- modern_rural_fe_mat
-    model_results[[ model_names[i] ]]$samples_all$other_rural_fe <- other_rural_fe_mat
-    model_results[[ model_names[i] ]]$samples_all$none_re <- none_re_mat
-    model_results[[ model_names[i] ]]$samples_all$modern_re <- modern_re_mat
-    model_results[[ model_names[i] ]]$samples_all$shared_re <- shared_re_mat
-
+    # model_results[[ model_names[i] ]]$samples_all <- list()
+    # model_results[[ model_names[i] ]]$samples_all$haz_fe <- haz_fe_mat
+    # model_results[[ model_names[i] ]]$samples_all$waz_fe <- waz_fe_mat
+    # model_results[[ model_names[i] ]]$samples_all$haz_rural_fe <- haz_rural_fe_mat
+    # model_results[[ model_names[i] ]]$samples_all$waz_rural_fe <- waz_rural_fe_mat
+    # model_results[[ model_names[i] ]]$samples_all$haz_re <- haz_re_mat
+    # model_results[[ model_names[i] ]]$samples_all$waz_re <- waz_re_mat
+    # model_results[[ model_names[i] ]]$samples_all$shared_re <- shared_re_mat
+    
     # obtain total effect for space - first half of bym2, or all of them for IID
     modern_re_tot_mat <- modern_re_mat[1:n_regions,]
-    none_re_tot_mat <- none_re_mat[1:n_regions,] + shared_re_mat[1:n_regions,]
+    other_re_tot_mat <- other_re_mat[1:n_regions,] + shared_re_mat[1:n_regions,]
 
     # get urban and rural FEs
     none_urban_fe_tot_mat <- none_fe_mat
@@ -222,12 +220,12 @@ for (i in 1:length(model_names)) {
     other_rural_fe_tot_mat <- other_fe_mat + other_rural_fe_mat
     
     # matrix of fitted estimates
-    fitted_none_urban_mat <- none_urban_fe_tot_mat[rep(1,n_regions),] + none_re_tot_mat
-    fitted_none_rural_mat <- none_rural_fe_tot_mat[rep(1,n_regions),] + none_re_tot_mat
+    fitted_none_urban_mat <- none_urban_fe_tot_mat[rep(1,n_regions),]
+    fitted_none_rural_mat <- none_rural_fe_tot_mat[rep(1,n_regions),]
     fitted_modern_urban_mat <- modern_urban_fe_tot_mat[rep(1,n_regions),] + modern_re_tot_mat
     fitted_modern_rural_mat <- modern_rural_fe_tot_mat[rep(1,n_regions),] + modern_re_tot_mat
-    fitted_other_urban_mat <- other_urban_fe_tot_mat[rep(1,n_regions),]
-    fitted_other_rural_mat <- other_rural_fe_tot_mat[rep(1,n_regions),]
+    fitted_other_urban_mat <- other_urban_fe_tot_mat[rep(1,n_regions),] + other_re_tot_mat
+    fitted_other_rural_mat <- other_rural_fe_tot_mat[rep(1,n_regions),] + other_re_tot_mat
     
     # transform estimates
     fitted_array_urban <- array(c(fitted_none_urban_mat, fitted_modern_urban_mat, fitted_other_urban_mat), 
@@ -289,8 +287,8 @@ for (i in 1:length(model_names)) {
 }
 
 # model results ####
-write_rds(model_results, file = "../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-unit-level/multinomial/ken2014-unit-level-multinomial-inla-posteriors.rds")
-write_rds(model_fits, file = "../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-unit-level/multinomial/ken2014-unit-level-multinomial-inla-fits.rds")
+write_rds(model_results, file = "../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-unit-level/multinomial/ken2014-unit-level-multinomial-noneref-inla-posteriors.rds")
+write_rds(model_fits, file = "../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-unit-level/multinomial/ken2014-unit-level-multinomial-noneref-inla-fits.rds")
 
 # model selection
 model_selection <- tibble(model = character(),

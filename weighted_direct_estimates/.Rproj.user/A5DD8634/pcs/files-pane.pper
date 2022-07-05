@@ -1,9 +1,9 @@
 {
-    "path" : "~/Desktop/india_mds_csmr/weighted_direct_estimates",
-    "sortOrder" : [
+    "path": "~/Desktop/india_mds_csmr/weighted_direct_estimates",
+    "sortOrder": [
         {
-            "ascending" : true,
-            "columnIndex" : 2
+            "ascending": true,
+            "columnIndex": 2
         }
     ]
 }

@@ -201,4 +201,4 @@ ggplot(results, aes(x = meanWAZuni.weighted, y = meanHAZuni.weighted,
     ylab("HAZ") +
     xlab("WAZ") +
     theme_light()
-ggsave("haz-waz-weighted-scatter.pdf", width = 6, height = 6)
+ggsave("haz-waz-weighted-scatter.pdf", width = 5.5, height = 5)

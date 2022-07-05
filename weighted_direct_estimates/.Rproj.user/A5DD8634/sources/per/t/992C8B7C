@@ -1,25 +1,25 @@
 {
-    "collab_server" : "",
-    "contents" : "",
-    "created" : 1581287536927.000,
-    "dirty" : false,
-    "encoding" : "UTF-8",
-    "folds" : "",
-    "hash" : "2544701241",
-    "id" : "992C8B7C",
-    "lastKnownWriteTime" : 1583354137,
-    "last_content_update" : 1583354137450,
-    "path" : "~/Desktop/survey-csmf/weighted_direct_estimates/fit_models.R",
-    "project_path" : "fit_models.R",
-    "properties" : {
-        "cursorPosition" : "17,0",
-        "scrollLine" : "0"
+    "id": "992C8B7C",
+    "path": "~/Desktop/survey-csmf/weighted_direct_estimates/fit_models.R",
+    "project_path": "fit_models.R",
+    "type": "r_source",
+    "hash": "2544701241",
+    "contents": "",
+    "dirty": false,
+    "created": 1581287536927.0,
+    "source_on_save": false,
+    "relative_order": 2,
+    "properties": {
+        "cursorPosition": "24,14",
+        "scrollLine": "0",
+        "Source": "Source"
     },
-    "read_only" : false,
-    "read_only_alternatives" : [
-    ],
-    "relative_order" : 2,
-    "source_on_save" : false,
-    "source_window" : "",
-    "type" : "r_source"
+    "folds": "",
+    "lastKnownWriteTime": 1625694468,
+    "encoding": "UTF-8",
+    "collab_server": "",
+    "source_window": "",
+    "last_content_update": 1625694468,
+    "read_only": false,
+    "read_only_alternatives": []
 }

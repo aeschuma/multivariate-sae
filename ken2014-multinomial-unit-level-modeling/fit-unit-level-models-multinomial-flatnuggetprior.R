@@ -64,6 +64,8 @@ data$contraceptive_factor <- factor(data$contraceptive, levels = c("none", "mode
 n_regions <- length(unique(data$admin1))
 
 # priors ####
+nugget_prior <- list(prec = list(prior = "gaussian",
+                                 param = c(0, 0)))
 iid_prior <- list(prec = list(prior = "pc.prec",
                               param = c(1, 0.01)))
 bym2_prior <- list(phi=list(prior="logitbeta", param=c(1, 1), initial=0.5), 
@@ -81,7 +83,7 @@ names(formulas) <- model_names
 formulas[["IID nonshared"]] <- formula("count ~ -1 + contraceptive_factor + rural.none + rural.modern + rural.other + 
                                         f(admin1.modern, model = 'iid', hyper = iid_prior) +
                                         f(admin1.none, model = 'iid', hyper = iid_prior) +
-                                        f(cluster, model = 'iid', hyper = iid_prior)")
+                                        f(cluster, model = 'iid', hyper = nugget_prior)")
 
 formulas[["BYM nonshared"]] <- formula("count ~ -1 + contraceptive_factor + rural.none + rural.modern + rural.other + 
                                         f(admin1.modern, model = 'bym2',
@@ -94,13 +96,13 @@ formulas[["BYM nonshared"]] <- formula("count ~ -1 + contraceptive_factor + rura
                                               scale.model = T, 
                                               constr = T,
                                               hyper = bym2_prior) +
-                                        f(cluster, model = 'iid', hyper = iid_prior)")
+                                        f(cluster, model = 'iid', hyper = nugget_prior)")
 formulas[["IID shared"]] <- formula("count ~ -1 + contraceptive_factor + rural.none + rural.modern + rural.other +
                                         f(admin1.modern, model = 'iid', hyper = iid_prior) +
                                         f(admin1.none, model = 'iid', hyper = iid_prior) +
                                         f(admin1.none.2, copy = \"admin1.modern\", 
                                           fixed = FALSE, hyper = lambda_prior) +
-                                        f(cluster, model = 'iid', hyper = iid_prior)")
+                                        f(cluster, model = 'iid', hyper = nugget_prior)")
 formulas[["BYM shared"]] <- formula("count ~ -1 + contraceptive_factor + rural.none + rural.modern + rural.other + 
                                         f(admin1.modern, model = 'bym2',
                                              graph = admin1.mat, 
@@ -114,7 +116,7 @@ formulas[["BYM shared"]] <- formula("count ~ -1 + contraceptive_factor + rural.n
                                               hyper = bym2_prior) +
                                         f(admin1.none.2, copy = \"admin1.modern\", 
                                           fixed = FALSE, hyper = lambda_prior) +
-                                        f(cluster, model = 'iid', hyper = iid_prior)")
+                                        f(cluster, model = 'iid', hyper = nugget_prior)")
 
 # modeling ####
 model_results <- vector(mode = "list", length = length(model_names))
@@ -289,8 +291,8 @@ for (i in 1:length(model_names)) {
 }
 
 # model results ####
-write_rds(model_results, file = "../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-unit-level/multinomial/ken2014-unit-level-multinomial-inla-posteriors.rds")
-write_rds(model_fits, file = "../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-unit-level/multinomial/ken2014-unit-level-multinomial-inla-fits.rds")
+write_rds(model_results, file = "../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-unit-level/multinomial/ken2014-unit-level-multinomial-flatnugget-inla-posteriors.rds")
+write_rds(model_fits, file = "../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-unit-level/multinomial/ken2014-unit-level-multinomial-flatnugget-inla-fits.rds")
 
 # model selection
 model_selection <- tibble(model = character(),

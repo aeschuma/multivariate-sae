@@ -45,7 +45,16 @@ load(paste0(root,"Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/haz-w
 
 n_regions <- nrow(poly.adm1)
 
-## reformat data into long form
+# read and format prop urban data ####
+prop_urban <- read_rds("/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/admin1_2014_urban_frac.rds")
+
+# format prop urban data
+admin_df <- dat_c %>% select(admin1.name, admin1) %>% distinct()
+prop_urban %<>% left_join(admin_df, 
+                          by = c("adm_name" = "admin1.name")) %>%
+    select(admin1, urb_frac)
+
+## reformat DHS data into long form
 results.long <- dat %>% select(admin1, admin1.name, admin1.char,
                                cluster, region, strata, rural, weights,
                                HAZ, WAZ) %>%
@@ -139,12 +148,15 @@ formulas[["BYM shared"]] <- formula("Y ~ -1 + outcome + rural.haz + rural.waz +
                                         f(cluster.waz, model = 'iid', hyper = iid_prior)")
 
 # Cross validation ####
-n_samples <- 250
+nsamps <- 250
 
 score_res <- expand_grid(model = model_names, region = 1:n_regions, rural = 0:1) %>% 
     mutate(score = NA)
-
 mse_res <- expand_grid(model = model_names, region = 1:n_regions, rural = 0:1) %>% 
+    mutate(mse = NA)
+score_res_both <- expand_grid(model = model_names, region = 1:n_regions) %>% 
+    mutate(score = NA)
+mse_res_both <- expand_grid(model = model_names, region = 1:n_regions) %>% 
     mutate(mse = NA)
 
 # in order to get direct estimates
@@ -153,8 +165,8 @@ my.svydesign <- survey::svydesign(ids = ~ cluster,
                                   data = dat)
 
 # loop through regions to hold out, fit models, and do CV
-for (r in 1:n_regions) {
-# for (r in c(28, 30)) {
+# for (r in 1:n_regions) {
+for (r in 8:n_regions) {
         
     message(paste0("region ", r))
     
@@ -178,6 +190,10 @@ for (r in 1:n_regions) {
     vcov.svymean_urban <- vcov(means.svymean_urban)
     vcov.svymean_rural <- vcov(means.svymean_rural)
     
+    heldout_both <- subset(my.svydesign, admin1 == r)
+    means.svymean_both <- svymean(~ HAZ + WAZ, heldout_both)
+    vcov.svymean_both <- vcov(means.svymean_both)
+    
     ## Fit models ####
     mod_list <- vector(mode = "list", length = n_models)
     names(mod_list) <- model_names
@@ -199,34 +215,34 @@ for (r in 1:n_regions) {
     for (mm in 1:length(mod_list)) {
         
         # sample from the posterior
-        samp <- inla.posterior.sample(n = n_samples, mod_list[[mm]])
+        samp <- inla.posterior.sample(n = nsamps, mod_list[[mm]])
         
         # process fitted values
         haz_fe_idx <- rownames(samp[[1]]$latent) %>% str_detect("outcomeHAZ:1") %>% which()
         waz_fe_idx <- rownames(samp[[1]]$latent) %>% str_detect("outcomeWAZ:1") %>% which()
-        haz_fe_mat <- matrix(NA, nrow = length(haz_fe_idx), ncol = n_samples)
-        waz_fe_mat <- matrix(NA, nrow = length(waz_fe_idx), ncol = n_samples)
+        haz_fe_mat <- matrix(NA, nrow = length(haz_fe_idx), ncol = nsamps)
+        waz_fe_mat <- matrix(NA, nrow = length(waz_fe_idx), ncol = nsamps)
         
         haz_rural_fe_idx <- rownames(samp[[1]]$latent) %>% str_detect("rural\\.haz") %>% which()
         waz_rural_fe_idx <- rownames(samp[[1]]$latent) %>% str_detect("rural\\.waz") %>% which()
-        haz_rural_fe_mat <- matrix(NA, nrow = length(haz_rural_fe_idx), ncol = n_samples)
-        waz_rural_fe_mat <- matrix(NA, nrow = length(waz_rural_fe_idx), ncol = n_samples)
+        haz_rural_fe_mat <- matrix(NA, nrow = length(haz_rural_fe_idx), ncol = nsamps)
+        waz_rural_fe_mat <- matrix(NA, nrow = length(waz_rural_fe_idx), ncol = nsamps)
         
         haz_re_idx <- rownames(samp[[1]]$latent) %>% str_detect("admin1\\.haz:") %>% which()
         waz_re_idx <- rownames(samp[[1]]$latent) %>% str_detect("admin1\\.waz:") %>% which()
-        haz_re_mat <- matrix(NA, nrow = length(haz_re_idx), ncol = n_samples)
-        waz_re_mat <- matrix(NA, nrow = length(waz_re_idx), ncol = n_samples)
+        haz_re_mat <- matrix(NA, nrow = length(haz_re_idx), ncol = nsamps)
+        waz_re_mat <- matrix(NA, nrow = length(waz_re_idx), ncol = nsamps)
         
         if(!grepl("nonshared", model_names[mm])) {
             shared_re_idx <- rownames(samp[[1]]$latent) %>% str_detect("admin1\\.haz\\.2:") %>% which()
-            shared_re_mat <- matrix(NA, nrow = length(shared_re_idx), ncol = n_samples)
+            shared_re_mat <- matrix(NA, nrow = length(shared_re_idx), ncol = nsamps)
         } else {
             shared_re_idx <- integer(0)
-            shared_re_mat <- matrix(0, nrow = nrow(haz_re_mat), ncol = n_samples)
+            shared_re_mat <- matrix(0, nrow = nrow(haz_re_mat), ncol = nsamps)
         }
         
         # fill in sample matrices
-        for (s in 1:n_samples) {
+        for (s in 1:nsamps) {
             haz_fe_mat[,s] <- samp[[s]]$latent[haz_fe_idx]
             waz_fe_mat[,s] <- samp[[s]]$latent[waz_fe_idx]
             haz_rural_fe_mat[,s] <- samp[[s]]$latent[haz_rural_fe_idx]
@@ -252,13 +268,36 @@ for (r in 1:n_regions) {
         fitted_haz_rural_mat <- haz_rural_fe_tot_mat[rep(1,n_regions),] + haz_re_tot_mat
         fitted_waz_rural_mat <- waz_rural_fe_tot_mat[rep(1,n_regions),] + waz_re_tot_mat
         
+        # aggregate over urban/rural
+        fitted_haz_both <- matrix(NA, nrow = n_regions, ncol = nsamps)
+        fitted_waz_both <- matrix(NA, nrow = n_regions, ncol = nsamps)
+        
+        for (s in 1:nsamps)  {
+            fitted_haz_both[, s] <- (fitted_haz_urban_mat[, s] * prop_urban$urb_frac) + 
+                (fitted_haz_rural_mat[, s] * (1 - prop_urban$urb_frac))
+            fitted_waz_both[, s] <- (fitted_waz_urban_mat[, s] * prop_urban$urb_frac) + 
+                (fitted_waz_rural_mat[, s] * (1 - prop_urban$urb_frac))
+        }
+        
         # calculate score and mse results
         y_lik_urban <- c()
         y_lik_rural <- c()
         sq_error_urban <- c()
         sq_error_rural <- c()
         
-        for (s in 1:n_samples) {
+        y_lik_both <- c()
+        sq_error_both <- c()
+        
+        for (s in 1:nsamps) {
+            
+            post_mean_both <- c(fitted_haz_both[r, s],
+                                fitted_waz_both[r, s])
+            y_lik_both <- c(y_lik_both,
+                             dmvnorm(as.numeric(means.svymean_both),
+                                     mean = post_mean_both,
+                                     sigma = vcov.svymean_both))
+            sq_error_urban <- c(sq_error_both,
+                                (means.svymean_both - post_mean_both)^2)
             
             post_mean_urban <- c(fitted_haz_urban_mat[r, s],
                                  fitted_waz_urban_mat[r, s])
@@ -286,6 +325,8 @@ for (r in 1:n_regions) {
         score_res[score_res$model == model_names[mm] & score_res$region == r & score_res$rural == 1, "score"] <- -log(mean(y_lik_rural))
         mse_res[mse_res$model == model_names[mm] & mse_res$region == r & mse_res$rural == 0, "mse"] <- mean(sq_error_urban)
         mse_res[mse_res$model == model_names[mm] & mse_res$region == r & mse_res$rural == 1, "mse"] <- mean(sq_error_rural)
+        score_res_both[score_res_both$model == model_names[mm] & score_res_both$region == r, "score"] <- -log(mean(y_lik_both))
+        mse_res_both[mse_res_both$model == model_names[mm] & mse_res_both$region == r, "mse"] <- mean(sq_error_both)
     }
     
     endtime <- Sys.time()
@@ -296,13 +337,16 @@ for (r in 1:n_regions) {
 # save the ones we want
 cv_res_list <- list(score = score_res,
                     mse = mse_res)
-
+cv_res_list_both <- list(score = score_res_both,
+                         mse = mse_res_both)
 # save results
-write_rds(cv_res_list, file = "../../../Dropbox/dissertation_2/survey-csmf/results/cv/cv_results-hazwaz-unitlevel.rds")
+write_rds(cv_res_list, file = "../../../Dropbox/dissertation_2/survey-csmf/results/cv/cv_results-hazwaz-unitlevel-ursep.rds")
+write_rds(cv_res_list_both, file = "../../../Dropbox/dissertation_2/survey-csmf/results/cv/cv_results-hazwaz-unitlevel-urcombined.rds")
 
 # if on Box, copy to real dropbox
 if (root == "P:/") {
-    write_rds(cv_res_list, file = "C:/Users/aeschuma/Dropbox/dissertation_2/survey-csmf/results/cv/cv_results-hazwaz-unitlevel.rds")
+    write_rds(cv_res_list, file = "C:/Users/aeschuma/Dropbox/dissertation_2/survey-csmf/results/cv/cv_results-hazwaz-unitlevel-ursep.rds")
+    write_rds(cv_res_list_both, file = "C:/Users/aeschuma/Dropbox/dissertation_2/survey-csmf/results/cv/cv_results-hazwaz-unitlevel-urcombined.rds")
 }
 
 # format
@@ -312,6 +356,15 @@ for (i in 1:length(cv_res)) {
     cv_res[[i]] <- cv_res_list[[i]] %>% mutate(model_factor = factor(model, levels = model_names))
 }
 
+cv_res_both <- vector(mode = "list", 
+                      length = length(cv_res_list_both))
+names(cv_res_both) <- names(cv_res_list_both)
+for (i in 1:length(cv_res_both)) {
+    cv_res_both[[i]] <- cv_res_list_both[[i]] %>% mutate(model_factor = factor(model, levels = model_names))
+}
+
+# urban/rural separate metrics
+message("URBAN/RURAL SEPARATE METRIC")
 score_to_plot <- cv_res$score %>%
     filter(!is.na(score)) %>%
     group_by(model_factor) %>%
@@ -332,10 +385,40 @@ mse_to_plot$mse <- ifelse(mse_to_plot$mse == min(mse_to_plot$mse),
 
 mse_to_plot %>%
     select(model_factor, mse) %>%
-    kable(format = "markdown", caption = "MSE",
+    kable(format = "markdown", caption = "MSE (urban/rural separate metrics)",
           col.names = c("Model", "MSE"))
 
 score_to_plot %>%
     select(model_factor, score) %>%
-    kable(format = "markdown", caption = "LogScore",
+    kable(format = "markdown", caption = "LogScore  (urban/rural separate metrics)",
+          col.names = c("Model", "$LogScore$"))
+
+# urban/rural combined metrics
+message("URBAN/RURAL COMBINED METRIC")
+score_to_plot_both <- cv_res_both$score %>%
+    filter(!is.na(score)) %>%
+    group_by(model_factor) %>%
+    summarise(score = round(mean(score), 3)) %>%
+    arrange(desc(score))
+score_to_plot_both$score <- ifelse(score_to_plot_both$score == min(score_to_plot_both$score),
+                                   paste0("\\textbf{", score_to_plot_both$score, "}"),
+                                   as.character(score_to_plot_both$score))
+
+mse_to_plot_both <- cv_res_both$mse %>%
+    filter(!is.na(mse)) %>%
+    group_by(model_factor) %>%
+    summarise(mse = round(mean(mse), 3)) %>%
+    arrange(desc(mse))
+mse_to_plot_both$mse <- ifelse(mse_to_plot_both$mse == min(mse_to_plot_both$mse),
+                               paste0("\\textbf{", mse_to_plot_both$mse, "}"),
+                               as.character(mse_to_plot_both$mse))
+
+mse_to_plot_both %>%
+    select(model_factor, mse) %>%
+    kable(format = "markdown", caption = "MSE (urban/rural combined metrics)",
+          col.names = c("Model", "MSE"))
+
+score_to_plot_both %>%
+    select(model_factor, score) %>%
+    kable(format = "markdown", caption = "LogScore  (urban/rural combined metrics)",
           col.names = c("Model", "$LogScore$"))

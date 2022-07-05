@@ -30,6 +30,7 @@ library(loo)
 fitINLA <- function(formula, data, lincombs) {
     inla(formula, data = data, 
          family = "gaussian",
+         quantiles = c(0.025, 0.1, 0.5, 0.9, 0.975),
          lincomb = lincombs,
          control.family = list(hyper = list(prec = list(initial = 10, fixed=T))), 
          control.predictor = list(compute=T),
