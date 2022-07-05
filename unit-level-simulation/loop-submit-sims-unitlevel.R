@@ -49,7 +49,7 @@ dgm_to_run <- 1:7
 # dgm_to_run <- c(7)
 
 ## Simulation number
-number_of_sims <- 1000
+number_of_sims <- 2
 
 ## loop and submit jobs
 running_total <- 0
