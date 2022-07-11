@@ -6,6 +6,8 @@ root <- ifelse(Sys.info()[1]=="Darwin","~/",
                       ifelse(Sys.info()[1]=="Linux","/home/users/aeschuma/",
                              stop("Unknown operating system"))))
 
+library(tidyverse); library(magrittr);
+
 ########
 ## TESTING THE CODE?
 ########
@@ -45,25 +47,30 @@ for (rn in 1:length(run_numbers)) {
     
     tmp.resfiles <- grep(paste0("results_run-", run_number, "_sim-"), resfiles, value = TRUE)
 
-    # compile results
-    results <- readRDS(tmp.resfiles[1])
-    paramnames <- vector(mode = "list", length = length(results))
-    measurenames <- vector(mode = "list", length = length(results))
-    results_comp <- vector(mode = "list", length = length(results))
-    for (j in 1:length(results)) {
-        paramnames[[j]] <- as.character(results[[j]]$param)
-        measurenames[[j]] <- names(results[[j]])[which(names(results[[j]]) != "param")]
-        results[[j]] <- array(NA, c(nrow(results[[j]]), ncol(results[[j]]) - 1, length(tmp.resfiles)))
-    }    
-    for (i in 1:length(tmp.resfiles)) {
-        tmpres <- readRDS(tmp.resfiles[i])
-        for (j in 1:length(tmpres)) {
-            results[[j]][,,i] <- as.matrix(tmpres[[j]][, measurenames[[j]]])
+    # storage for results
+    one_tmp <- readRDS(tmp.resfiles[1])
+    results <- vector(mode = "list", length = length(one_tmp))
+    for (i in 1:length(results)) {
+        results[[i]] <- vector(mode = "list", length = 8)
+        names(results[[i]]) <- c("bias", "relative bias", "variance", "mse", 
+                                 "coverage80", "width80", "coverage95", "width95")
+        for (j in 1:length(results[[i]])) {
+            results[[i]][[j]] <- matrix(NA, nrow = nrow(one_tmp[[1]]), ncol = length(tmp.resfiles))
         }
     }
-    for (j in 1:length(results)) {
-        results_comp[[j]] <- cbind(paramnames[[j]], as.data.frame(apply(results[[j]], c(1, 2), mean)))
-        names(results_comp[[j]]) <- c("param", paste0("mean_",measurenames[[j]]))
+    
+    # loop through files and store results
+    for (j in 1:length(tmp.resfiles)) {
+        tmpfile <- readRDS(tmp.resfiles[j])
+        for (i in 1:length(results)) {
+            results[[i]]$`bias`[, j] <- tmpfile[[i]]$est - tmpfile[[i]]$truth
+            results[[i]]$`relative bias`[, j] <- (tmpfile[[i]]$est - tmpfile[[i]]$truth)/tmpfile[[i]]$truth
+            results[[i]]$`variance`[, j] <- var(tmpfile[[i]]$est)
+            results[[i]]$`mse`[, j] <- mean((tmpfile[[i]]$est - tmpfile[[i]]$truth)^2)
+            results[[i]]$`coverage80`[, j] <- tmpfile[[i]]$coverage.80
+            results[[i]]$`coverage95`[, j] <- tmpfile[[i]]$coverage.95
+            
+        }
     }
    
    
