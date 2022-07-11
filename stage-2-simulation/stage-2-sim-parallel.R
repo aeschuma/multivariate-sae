@@ -14,7 +14,7 @@ library(scales); library(RColorBrewer); library(ggplot2); library(tidyverse); li
 library(haven); library(knitr); library(INLA); library(readr);
 
 ## TESTING THE CODE?
-testing <- FALSE
+testing <- TRUE
 
 ## define directories
 
@@ -46,13 +46,13 @@ cat(paste("set parameters from command args \n"))
 # Set parameters! ####
 if (testing) {
     ## data generation options
-    dgm <- 10
+    dgm <- 1
     
     ## which run
     run_number <- 999
     
     ## which simulation
-    sim <- 499
+    sim <- 1
 } else {
     ## data generation options
     dgm <- as.numeric(commandArgs(trailingOnly=TRUE)[1])
@@ -177,20 +177,26 @@ for (i in 1:length(sim_res_par)) {
 }
 
 # Direct estimates ####
-direst_values <- simulated_data$datlist$value
-std_errs_dir <- c(simulated_data$dattibble$seHAZ.bi, simulated_data$dattibble$seWAZ.bi)
-ci_80_direct <- cbind(lower = direst_values - qnorm(0.9)*std_errs_dir, 
-                      upper = direst_values + qnorm(0.9)*std_errs_dir) %>% as.data.frame()
-ci_95_direct <- cbind(lower = direst_values - qnorm(0.975)*std_errs_dir, 
-                      upper = direst_values + qnorm(0.975)*std_errs_dir) %>% as.data.frame()
+direst <- tibble(admin1 = c(simulated_data$dattibble$admin1, 
+                            simulated_data$dattibble$admin1),
+                 outcome = c(rep("HAZ", nrow(simulated_data$dattibble)), 
+                             rep("WAZ", nrow(simulated_data$dattibble))),
+                 est = c(simulated_data$dattibble$meanHAZ.bi, 
+                         simulated_data$dattibble$meanWAZ.bi),
+                 se = c(simulated_data$dattibble$seHAZ.bi, 
+                        simulated_data$dattibble$seWAZ.bi)) %>%
+    mutate(lower80 = est - qnorm(0.9) * se,
+           upper80 = est + qnorm(0.9) * se,
+           lower95 = est - qnorm(0.975) * se,
+           upper95 = est + qnorm(0.975) * se)
 
 direst <- data.frame(param = sim_res_latent_means[[1]]$param,
                      truth = true_vals,
-                     est = direst_values,
-                     coverage.80 = (true_vals > ci_80_direct$lower) & (true_vals < ci_80_direct$upper),
-                     width.80 = ci_80_direct$upper - ci_80_direct$lower,
-                     coverage.95 = (true_vals > ci_95_direct$lower) & (true_vals < ci_95_direct$upper),
-                     width.95 = ci_95_direct$upper - ci_95_direct$lower)
+                     est = direst$est,
+                     coverage.80 = (true_vals > direst$lower80) & (true_vals < direst$upper80),
+                     width.80 = direst$upper80 - direst$lower80,
+                     coverage.95 = (true_vals > direst$lower95) & (true_vals < direst$upper95),
+                     width.95 = direst$upper95 - direst$lower95)
 
 sim_res <- c(list(direst), sim_mod_res)
 names(sim_res) <- c("Direct estimates", names(inla.results))

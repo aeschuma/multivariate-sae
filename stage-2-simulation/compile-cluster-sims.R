@@ -12,7 +12,7 @@ library(tidyverse); library(magrittr);
 ## TESTING THE CODE?
 ########
 
-testing <- FALSE
+testing <- TRUE
 
 ## define directories
 
@@ -49,13 +49,14 @@ for (rn in 1:length(run_numbers)) {
 
     # storage for results
     one_tmp <- readRDS(tmp.resfiles[1])
+    params <- one_tmp[[2]]$param
     results <- vector(mode = "list", length = length(one_tmp))
     for (i in 1:length(results)) {
         results[[i]] <- vector(mode = "list", length = 8)
-        names(results[[i]]) <- c("bias", "relative bias", "variance", "mse", 
+        names(results[[i]]) <- c("bias", "relative bias", "est", "squared error", 
                                  "coverage80", "width80", "coverage95", "width95")
         for (j in 1:length(results[[i]])) {
-            results[[i]][[j]] <- matrix(NA, nrow = nrow(one_tmp[[1]]), ncol = length(tmp.resfiles))
+            results[[i]][[j]] <- matrix(NA, nrow = nrow(one_tmp[[2]]), ncol = length(tmp.resfiles))
         }
     }
     
@@ -63,17 +64,65 @@ for (rn in 1:length(run_numbers)) {
     for (j in 1:length(tmp.resfiles)) {
         tmpfile <- readRDS(tmp.resfiles[j])
         for (i in 1:length(results)) {
+            if (i == 1) {
+                nadat <- data.frame(param = c("beta[1]", "beta[2]", 
+                                              "sigma[1]", "sigma[2]", 
+                                              "rho[1]", "rho[2]",
+                                              "lambda"),
+                                    truth = NA, est = NA, 
+                                    coverage.80 = NA, width.80  = NA, 
+                                    coverage.95 = NA, width.95 = NA)
+                tmpfile[[i]] <- rbind(nadat,
+                                      tmpfile[[i]])
+            }
             results[[i]]$`bias`[, j] <- tmpfile[[i]]$est - tmpfile[[i]]$truth
             results[[i]]$`relative bias`[, j] <- (tmpfile[[i]]$est - tmpfile[[i]]$truth)/tmpfile[[i]]$truth
-            results[[i]]$`variance`[, j] <- var(tmpfile[[i]]$est)
-            results[[i]]$`mse`[, j] <- mean((tmpfile[[i]]$est - tmpfile[[i]]$truth)^2)
+            results[[i]]$`est`[, j] <- tmpfile[[i]]$est
+            results[[i]]$`squared error`[, j] <- (tmpfile[[i]]$est - tmpfile[[i]]$truth)^2
             results[[i]]$`coverage80`[, j] <- tmpfile[[i]]$coverage.80
             results[[i]]$`coverage95`[, j] <- tmpfile[[i]]$coverage.95
-            
+            results[[i]]$`width80`[, j] <- tmpfile[[i]]$width.80
+            results[[i]]$`width95`[, j] <- tmpfile[[i]]$width.95
         }
     }
-   
-   
+    
+    results_comp <- list()
+    length(results_comp) <- length(results)
+    
+    # compile measures across sims
+    for (i in 1:length(results)) {
+        results_comp[[i]] <- data.frame(param = params,
+                                        bias = apply(results[[i]]$bias, 1, mean),
+                                        relbias = apply(results[[i]]$`relative bias`, 1, mean),
+                                        var = apply(results[[i]]$est, 1, var),
+                                        mse = apply(results[[i]]$`squared error`, 1, mean),
+                                        cov80 = apply(results[[i]]$coverage80, 1, mean),
+                                        width80 = apply(results[[i]]$width80, 1, mean),
+                                        cov95 = apply(results[[i]]$coverage95, 1, mean),
+                                        width95 = apply(results[[i]]$width95, 1, mean))
+        # collapse latent means
+        lm_haz_params <- grep("haz.reg", params, value = TRUE)
+        lm_waz_params <- grep("waz.reg", params, value = TRUE)
+        lm_haz <- apply(results_comp[[i]] %>% 
+                            filter(param %in% lm_haz_params) %>% 
+                            select(-param),
+                        2, mean)
+        lm_waz <- apply(results_comp[[i]] %>% 
+                            filter(param %in% lm_waz_params) %>% 
+                            select(-param),
+                        2, mean)
+        
+        lm_res <- as.data.frame(rbind(lm_haz, lm_waz))
+        lm_res$param <- rownames(lm_res)
+        rownames(lm_res) <- NULL
+        results_comp[[i]] <- results_comp[[i]] %>% 
+            filter(param %in% c("beta[1]", "beta[2]", 
+                                "sigma[1]", "sigma[2]", 
+                                "rho[1]", "rho[2]",
+                                "lambda")) %>%
+            bind_rows(lm_res)
+    }
+    
     if (!testing) {
         
         # save results

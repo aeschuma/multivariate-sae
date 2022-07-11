@@ -208,7 +208,7 @@ simulateData <- function(dgm_specs, n_r, Amat, scaling_factor, seed_re, seed_lik
     names(mean_pars) <- mean_pars_names
     
     # simulate data!
-    dgm_model <- dgm_specs %>% select(mean_pars_names) %>% unlist() %>% unique()
+    dgm_model <- dgm_specs %>% dplyr::select(all_of(mean_pars_names)) %>% unlist() %>% unique()
     if(length(dgm_model) != 1) {
         stop("only one model can be used to specify DGM parameters; note that the model specified for parameters determines the DGM")
     }
@@ -299,7 +299,7 @@ simulateData <- function(dgm_specs, n_r, Amat, scaling_factor, seed_re, seed_lik
                       seHAZ.bi = sqrt(V_hat_array[,1,1]),
                       seWAZ.bi = sqrt(V_hat_array[,2,2]),
                       corr.bi = my.corrs_hat)
-    results.long <- results %>% select(admin1,
+    results.long <- results %>% dplyr::select(admin1,
                                        meanHAZ.bi, meanWAZ.bi) %>%
         pivot_longer(cols = c(meanHAZ.bi, meanWAZ.bi),
                      names_to = "outcome",
