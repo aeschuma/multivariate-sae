@@ -53,8 +53,13 @@ results.long$rural.waz <- ifelse(results.long$outcome == "WAZ", results.long$rur
 ## add another index for the shared component
 results.long$admin1.haz.2 <- results.long$admin1.haz
 
+# person ID
+results.long <- results.long %>% group_by(admin1, cluster) %>% mutate(pid = 1:n()) %>% ungroup()
+
 # create a list of the data
 data <- as.list(results.long)
+data.haz <- results.long %>% filter(outcome == "HAZ") %>% as.list()
+data.waz <- results.long %>% filter(outcome == "WAZ") %>% as.list()
 
 # create matrix for outcome in order to have two likelihoods
 data$Y <- cbind(data$value.haz, data$value.waz)
@@ -69,14 +74,20 @@ bym2_prior <- list(phi=list(prior="logitbeta", param=c(1, 1), initial=0.5),
                    prec=list(prior="pc.prec", param=c(1, 0.01), initial=5))
 lambda_prior <- list(beta = list(prior = 'logtnormal', param = c(0, 1)))
 
-# models to run  ####
-model_names <- c("IID nonshared", "BYM nonshared",
-                 "IID shared", "BYM shared")
-
 # formulas ####
-formulas <- vector(mode = "list", length = length(model_names))
-names(formulas) <- model_names
+formulas <- list()
 
+# formulas[["IID univariate"]] <- formula("value ~ 1 + rural +
+#                                         f(admin1, model = 'iid', hyper = iid_prior) +
+#                                         f(cluster, model = 'iid', hyper = iid_prior)")
+# 
+# formulas[["BYM univariate"]] <- formula("value ~ 1 + rural + 
+#                                         f(admin1, model = 'bym2',
+#                                              graph = admin1.mat, 
+#                                              scale.model = T, 
+#                                              constr = T,
+#                                              hyper = bym2_prior) +
+#                                         f(cluster, model = 'iid', hyper = iid_prior)")
 formulas[["IID nonshared"]] <- formula("Y ~ -1 + outcome + rural.haz + rural.waz + 
                                         f(admin1.haz, model = 'iid', hyper = iid_prior) +
                                         f(admin1.waz, model = 'iid', hyper = iid_prior) +
@@ -118,6 +129,7 @@ formulas[["BYM shared"]] <- formula("Y ~ -1 + outcome + rural.haz + rural.waz +
                                           fixed = FALSE, hyper = lambda_prior) +
                                         f(cluster.haz, model = 'iid', hyper = iid_prior) +
                                         f(cluster.waz, model = 'iid', hyper = iid_prior)")
+model_names <- names(formulas)
 
 # modeling ####
 model_results <- vector(mode = "list", length = length(model_names))
@@ -130,6 +142,7 @@ nsamps <- 1000
 
 for (i in 1:length(model_names)) {
     start_time <- Sys.time()
+    
     tmp <- inla(formulas[[ model_names[i] ]], data = data,
                 family = rep("gaussian",2),
                 quantiles=c(0.025, 0.1, 0.5, 0.9, 0.975),
@@ -138,8 +151,55 @@ for (i in 1:length(model_names)) {
                 # control.inla = list(lincomb.derived.correlation.matrix=T),
                 # control.fixed = list(prec = list(default = 0.001), correlation.matrix=T),
                 control.compute = list(config=T, waic = TRUE, dic = TRUE, cpo = TRUE))
-    # print(model_results[[ model_names[i] ]]$summary.fixed)
-    # print(model_results[[ model_names[i] ]]$summary.hyperpar)
+    
+    # fit and plot univariate models if we want to
+    # if (grepl("univariate", model_names[i])) {
+    #     tmp.haz <- inla(formulas[[ model_names[i] ]], data = data.haz,
+    #                     family = "gaussian",
+    #                     quantiles=c(0.025, 0.1, 0.5, 0.9, 0.975),
+    #                     # control.family = list(),
+    #                     control.predictor = list(compute=T),
+    #                     # control.inla = list(lincomb.derived.correlation.matrix=T),
+    #                     # control.fixed = list(prec = list(default = 0.001), correlation.matrix=T),
+    #                     control.compute = list(config=T, waic = TRUE, dic = TRUE, cpo = TRUE))
+    #     tmp.waz <- inla(formulas[[ model_names[i] ]], data = data.waz,
+    #                     family = "gaussian",
+    #                     quantiles=c(0.025, 0.1, 0.5, 0.9, 0.975),
+    #                     # control.family = list(),
+    #                     control.predictor = list(compute=T),
+    #                     # control.inla = list(lincomb.derived.correlation.matrix=T),
+    #                     # control.fixed = list(prec = list(default = 0.001), correlation.matrix=T),
+    #                     control.compute = list(config=T, waic = TRUE, dic = TRUE, cpo = TRUE))
+    #     tmp.uni.res.haz <- tibble(admin1 = data.haz$admin1,
+    #                               cluster = data.haz$cluster,
+    #                               pid = data.haz$pid,
+    #                               outcome = "HAZ",
+    #                               pred.med.uni = tmp.haz$summary.fitted.values$`0.5quant`,
+    #                               pred.lwr.uni = tmp.haz$summary.fitted.values$`0.025quant`,
+    #                               pred.upr.uni = tmp.haz$summary.fitted.values$`0.975quant`)
+    #     tmp.uni.res.waz <- tibble(admin1 = data.waz$admin1,
+    #                               cluster = data.waz$cluster,
+    #                               pid = data.waz$pid,
+    #                               outcome = "WAZ",
+    #                               pred.med.uni = tmp.waz$summary.fitted.values$`0.5quant`,
+    #                               pred.lwr.uni = tmp.waz$summary.fitted.values$`0.025quant`,
+    #                               pred.upr.uni = tmp.waz$summary.fitted.values$`0.975quant`)
+    #     tmp.bi.res <- tibble(admin1 = data$admin1,
+    #                          cluster = data$cluster,
+    #                          pid = data$pid,
+    #                          outcome = data$outcome,
+    #                          pred.med.bi = tmp$summary.fitted.values$`0.5quant`,
+    #                          pred.lwr.bi = tmp$summary.fitted.values$`0.025quant`,
+    #                          pred.upr.bi = tmp$summary.fitted.values$`0.975quant`)
+    #     
+    #     tmp.res <- tmp.uni.res.haz %>% bind_rows(tmp.uni.res.waz) %>% left_join(tmp.bi.res)
+    #     
+    #     #plot comparison
+    #     ggplot(tmp.res, aes(x = pred.med.bi, y = pred.med.uni)) + geom_point(alpha = 0.5) + geom_abline(slope = 1, intercept = 0, col = "darkgreen", alpha = 0.7)
+    #     ggplot(tmp.res, aes(x = pred.lwr.bi, y = pred.lwr.uni)) + geom_point(alpha = 0.5) + geom_abline(slope = 1, intercept = 0, col = "darkgreen", alpha = 0.7)
+    #     ggplot(tmp.res, aes(x = pred.upr.bi, y = pred.upr.uni)) + geom_point(alpha = 0.5) + geom_abline(slope = 1, intercept = 0, col = "darkgreen", alpha = 0.7)
+    #     
+    # }
     
     # extract and format results
     samp <- inla.posterior.sample(n = nsamps, result = tmp)

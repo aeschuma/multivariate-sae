@@ -47,6 +47,7 @@ tmps <- vector(mode = "list", length = length(run_numbers))
 which_runs <- c(1, 6:10, 2:3, 5) # remember to put in the order of the scenarios in the sims in the chapter
 
 run_results <- vector(mode = "list", length = length(which_runs))
+
 for (i in 1:length(which_runs)) {
     # cat(paste(i, "\n"))
     run_number <- run_numbers[which_runs[i]]
@@ -73,10 +74,12 @@ for (i in 1:length(which_runs)) {
 
 write_rds(run_results, paste0(dropbox_dir, "/", "simulation-results-tables.rds"))
 write_rds(run_results, paste0(dropbox_dir, "/../proj-2-chapter-results/simulation-results-tables.rds"))
-
+scenario_dgms <- tibble(scenario = 1:9, 
+                        dgm = c(6:1, 7:8, 10))
 # load tables
 for (i in 1:length(run_results)) {
-    run_results[[i]]$scenario <- i
+    # print(run_results[[i]]$dgm[1])
+    run_results[[i]] <- run_results[[i]] %>% left_join(scenario_dgms)
     run_results[[i]]$Model <- rep(c("O", "I", "II", "III", "IV", "V", "VI"), each = 2)
     run_results[[i]]$Model <- factor(run_results[[i]]$Model, levels = c("O", "I", "II", "III", "IV", "V", "VI"))
 }

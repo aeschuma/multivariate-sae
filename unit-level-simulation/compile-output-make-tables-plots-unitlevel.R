@@ -43,9 +43,10 @@ run_numbers <- sort(run_numbers)
 
 # read in results and display in tables
 tmps <- vector(mode = "list", length = length(run_numbers))
-which_runs <- c(1:7) # remember to put in the order of the scenarios in the sims in the chapter
+which_runs <- c(4, 2, 3, 1, 6, 5, 7) # remember to put in the order of the scenarios in the sims in the chapter
 
 run_results <- vector(mode = "list", length = length(which_runs))
+
 for (i in 1:length(which_runs)) {
     # cat(paste(i, "\n"))
     run_number <- run_numbers[which_runs[i]]
@@ -76,7 +77,7 @@ write_rds(run_results, paste0(dropbox_dir, "/../proj-3-chapter-results/simulatio
 
 # load tables
 for (i in 1:length(run_results)) {
-    run_results[[i]]$scenario <- run_results[[i]]$dgm
+    run_results[[i]]$scenario <- i
     run_results[[i]]$Model <- rep(c("I", "II", "III", "IV"), each = 2)
     run_results[[i]]$Model <- factor(run_results[[i]]$Model, levels = c("I", "II", "III", "IV"))
 }

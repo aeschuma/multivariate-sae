@@ -19,7 +19,7 @@ library(ggpubr)
 
 # load and format data ####
 load("/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/haz-waz-kenDHS2014.rda")
-prop_urban <- read_rds("/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/admin1_2014_female_15_49_urban_frac.rds")
+prop_urban <- read_rds("/Users/austin/Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/admin1_2014_urban_frac.rds")
 
 # format prop urban data
 admin_df <- dat_c %>% select(admin1.name, admin1) %>% distinct()
@@ -56,6 +56,11 @@ results.long$admin1.none.2 <- results.long$admin1.none
 results.long$admin1.modern.2 <- results.long$admin1.modern
 results.long$admin1.other.2 <- results.long$admin1.other
 
+# create dummy variables for category
+results.long$cont_none <- ifelse(results.long$contraceptive == "none", 1, 0)
+results.long$cont_modern <- ifelse(results.long$contraceptive == "modern", 1, 0)
+results.long$cont_other <- ifelse(results.long$contraceptive == "other", 1, 0)
+
 # create a list of the data
 data <- as.list(results.long)
 data$contraceptive_factor <- factor(data$contraceptive, levels = c("none", "modern", "other"))
@@ -78,12 +83,12 @@ model_names <- c("IID nonshared", "BYM nonshared",
 formulas <- vector(mode = "list", length = length(model_names))
 names(formulas) <- model_names
 
-formulas[["IID nonshared"]] <- formula("count ~ -1 + contraceptive_factor + rural.none + rural.modern + rural.other + 
+formulas[["IID nonshared"]] <- formula("count ~ -1 + cont_none + cont_modern + rural.none + rural.modern + 
                                         f(admin1.modern, model = 'iid', hyper = iid_prior) +
                                         f(admin1.none, model = 'iid', hyper = iid_prior) +
                                         f(cluster, model = 'iid', hyper = iid_prior)")
 
-formulas[["BYM nonshared"]] <- formula("count ~ -1 + contraceptive_factor + rural.none + rural.modern + rural.other + 
+formulas[["BYM nonshared"]] <- formula("count ~ -1 + cont_none + cont_modern + rural.none + rural.modern + 
                                         f(admin1.modern, model = 'bym2',
                                              graph = admin1.mat, 
                                              scale.model = T, 
@@ -95,13 +100,13 @@ formulas[["BYM nonshared"]] <- formula("count ~ -1 + contraceptive_factor + rura
                                               constr = T,
                                               hyper = bym2_prior) +
                                         f(cluster, model = 'iid', hyper = iid_prior)")
-formulas[["IID shared"]] <- formula("count ~ -1 + contraceptive_factor + rural.none + rural.modern + rural.other +
+formulas[["IID shared"]] <- formula("count ~ -1 + cont_none + cont_modern + rural.none + rural.modern + 
                                         f(admin1.modern, model = 'iid', hyper = iid_prior) +
                                         f(admin1.none, model = 'iid', hyper = iid_prior) +
                                         f(admin1.none.2, copy = \"admin1.modern\", 
                                           fixed = FALSE, hyper = lambda_prior) +
                                         f(cluster, model = 'iid', hyper = iid_prior)")
-formulas[["BYM shared"]] <- formula("count ~ -1 + contraceptive_factor + rural.none + rural.modern + rural.other + 
+formulas[["BYM shared"]] <- formula("count ~ -1 + cont_none + cont_modern + rural.none + rural.modern + 
                                         f(admin1.modern, model = 'bym2',
                                              graph = admin1.mat, 
                                              scale.model = T, 
@@ -141,6 +146,14 @@ for (i in 1:length(model_names)) {
     
     # extract and format results
     samp <- inla.posterior.sample(n = nsamps, result = tmp)
+    
+    
+    # load final model for comparison
+    fmod <- readRDS("/Users/austin/Dropbox/dissertation_2/survey-csmf/results/ken2014-unit-level/multinomial/ken2014-unit-level-multinomial-inla-fits.rds")
+    fmod <- fmod[[i]]
+    
+    # compare
+    
     
     # save summaries
     model_results[[ model_names[i] ]]$summaries <- list()

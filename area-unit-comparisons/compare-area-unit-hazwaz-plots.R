@@ -10,142 +10,23 @@ library(knitr);library(kableExtra);library(magrittr);library(svyVGAM);library(mv
 library(rgdal);library(INLA);library(viridis);library(classInt);library(gridExtra);
 library(ggpubr);library(gridExtra);
 
-savedir <- "~/Dropbox/dissertation_2/survey-csmf/results/proj-2-chapter-results"
-
-# functions ####
-
-# comparison scatterplot function
-comparison_scatter <- function(data, measure, x_var, y_var) {
-    # testing
-    # data = data
-    # measure = measures[1]
-    # x_var = comp.mod.2[1]
-    # y_var = comp.mod.1[1]
-    
-    data.tmp <- data %>% select("admin1.name", "measure", "model.name", "value")
-    
-    # object name can't be same name as variable
-    my.measure <- measure 
-    
-    # pivot and subset data for this plot
-    tmp <- data.tmp %>% 
-        filter(model.name %in% c(x_var,  y_var)) %>%
-        pivot_wider(names_from = model.name, values_from = value) %>%
-        filter(measure == my.measure)
-    
-    xyvars <- c(x_var, y_var)
-    labs <- c(x_var, y_var)
-    
-    if (measure == "haz.icar.50") {
-        main <- "Median HAZ ICAR RE"
-    } else if (measure == "waz.icar.50") {
-        main <- "Median WAZ ICAR RE"
-    } else if (measure == "haz.iid.50") {
-        main <- "Median HAZ IID RE"
-    } else if (measure == "waz.iid.50") {
-        main <- "Median WAZ IID RE"
-    } else if (measure == "haz.pred.50") {
-        main <- "Median predicted HAZ"
-    } else if (measure == "waz.pred.50") {
-        main <- "Median predicted WAZ"
-    } else if (measure == "haz.pred.width80") {
-        main <- "Width of HAZ posterior 80% interval"
-    } else if (measure == "waz.pred.width80") {
-        main <- "Width of WAZ posterior 80% interval"
-    }
-    
-    # calculate mean abs diff
-    my.x <- tmp %>% pull(x_var)
-    my.y <- tmp %>% pull(y_var)
-    mean.abs.diff <-  signif(mean(abs(my.x - my.y)), 3)
-    
-    # make plot
-    ggplot(tmp %>% filter(measure == my.measure), aes(x = get(x_var), y = get(y_var))) +
-        geom_point(alpha = 0.75, cex = 2) + 
-        geom_abline(slope = 1, intercept = 0, col = "darkgreen", size = 1.2) + 
-        xlab(labs[1]) +  
-        ylab(labs[2]) +
-        ggtitle(main,
-                subtitle = paste0("Mean absolute diff: ", 
-                                  mean.abs.diff)) +
-        theme(axis.title = element_text(size=8)) +
-        theme_light() 
-}
-
-# plot comparisons between 3 models x 2 outcomes (HAZ and WAZ)
-twoway_comp_plot <- function(data, measure) {
-    
-    # testing
-    # data <- all.results %>% filter(model.name %in% c("Direct", "Univariate IID", "Univariate BYM"))
-    # measure <- "pred"
-    
-    if (!(measure %in% c("icar", "iid", "pred", "pred.width"))) stop("Measure not supported")
-    
-    measures <- c(NA, NA)
-    if (measure == "icar") {
-        measures <- c("haz.icar.50", "waz.icar.50")
-    } else if (measure == "iid") {
-        measures <- c("haz.iid.50", "waz.iid.50")
-    } else if (measure == "pred") {
-        measures <- c("haz.pred.50", "waz.pred.50")
-    } else if (measure == "pred.width") {
-        measures <- c("haz.pred.width95", "waz.pred.width95")
-    } 
-    
-    # storage for list of plots
-    models <- unique(data$model.name)
-    nmodels <- length(models)
-    ncomps <- choose(nmodels,2)
-    npages <- ceiling(ncomps/12)
-    med.comp.plots <- vector(mode = "list", length = 2*ncomps)
-    comp.mod.1 <- c()
-    comp.mod.2 <- c()
-    for (i in 1:nmodels) {
-        for (j in 1:i) {
-            if (i == j) next
-            comp.mod.1 <- c(comp.mod.1, models[i])
-            comp.mod.2 <- c(comp.mod.2, models[j])
-        }
-    }
-    
-    ## start plots
-    counter <- 0
-    for (i in 1:length(measures)) {
-      for (j in 1:ncomps) {
-        counter <- counter + 1
-        if (j == 1) {
-          med.comp.plots[[counter]] <- comparison_scatter(data = data, 
-                                                          measure = measures[i], 
-                                                          x_var = comp.mod.2[j], 
-                                                          y_var = comp.mod.1[j])
-        } else {
-          plt <- comparison_scatter(data = data, 
-                                    measure = measures[i], 
-                                    x_var = comp.mod.2[j], 
-                                    y_var = comp.mod.1[j]) 
-          med.comp.plots[[counter]] <- plt + ggtitle("")
-        }
-      }
-    }
-    
-    # plot them all
-    ggarrange(plotlist = med.comp.plots, ncol = ncomps, nrow = length(measures))
-}
+savedir <- "~/Dropbox/dissertation_2/survey-csmf/results/proj-3-chapter-results"
 
 # load data and modeling results ####
 
 ## raw data 
 load("../../../Dropbox/dissertation_2/survey-csmf/data/ken_dhs2014/data/haz-waz-kenDHS2014.rda")
 
-## direct estimates (stage 1)
-stage_1_list <- read_rds("../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-hazwaz-stage-1.rds")
-results_direct <- stage_1_list$results
-n_regions <- nrow(results_direct)
+## area level estimates (from inla)
+area_list <- read_rds("../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-hazwaz-stage-2-inla-all.rds")
+area_list[[7]] <- NULL
 
-## stage 2 estimates (from inla)
-stage_2_list <- read_rds("../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-hazwaz/ken2014-hazwaz-stage-2-inla-all.rds")
-stage_2_list[[7]] <- NULL
-n_stage_2_models <- length(stage_2_list)
+## unit level results
+unit_fits <- read_rds("../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-unit-level/hazwaz/ken2014-unit-level-hazwaz-inla-fits.rds")
+unit_posteriors <- read_rds("../../../Dropbox/dissertation_2/survey-csmf/results/ken2014-unit-level/hazwaz/ken2014-unit-level-hazwaz-inla-posteriors.rds")
+
+
+
 
 # combine and format data ####
 
