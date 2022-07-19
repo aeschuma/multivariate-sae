@@ -216,7 +216,7 @@ for (i in 1:length(sim_res_par)) {
                           sim_res_latent_means[[i]])
 }
 
-sim_mod_res$run_time <- Sys.time() - start_time
+sim_res$run_time <- Sys.time() - start_time
 
 # Save results ####
 cat(paste("Save results \n"))
