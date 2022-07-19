@@ -83,9 +83,10 @@ for (i in 1:length(run_results)) {
 }
 all_sim_tables <- do.call(rbind, run_results)
 
-plotResults <- function(data, scenarios, measure, measure_name) {
+plotResults <- function(data, scenarios, scenario_names, measure, measure_name) {
     scenarios_xaxis <- 1:length(scenarios)
     scenario_xwalk <- tibble(scenario = scenarios, 
+                             scenario_names = scenario_names,
                              scenario_xaxis = scenarios_xaxis)
     mydata <- data %>% filter(scenario %in% scenarios)
     mydata <- mydata %>% left_join(scenario_xwalk)
@@ -93,10 +94,10 @@ plotResults <- function(data, scenarios, measure, measure_name) {
     mydata$scenario_xaxis <- mydata$scenario_xaxis + (as.numeric(mydata$Model) + 0.4)/(max(as.numeric(mydata$Model)) + 2)
     ggplot(mydata, 
            aes(x = scenario_xaxis, y = get(measure), label = Model, color = Model)) +
-        geom_text(size = 3.5, fontface = 'bold') +
+        geom_text(size = 4.5, fontface = 'bold') +
         geom_vline(xintercept = 1:(length(scenarios) + 1), alpha = 0.65) +
         scale_fill_viridis(discrete = TRUE, option = "C", alpha = 0.75) +
-        scale_x_continuous(breaks = (1:length(scenarios)) + 0.5, labels = scenarios) +
+        scale_x_continuous(breaks = (1:length(scenarios)) + 0.5, labels = scenario_names) +
         facet_wrap(~ param, scales = "fixed") +
         xlab("Scenario") +
         ylab(measure_name) +
@@ -108,12 +109,18 @@ plotResults <- function(data, scenarios, measure, measure_name) {
 }
 
 # graph scenarios 1-4
-p1 <- plotResults(data = all_sim_tables, scenarios = 1:4, measure = "mean_bias", measure_name = "Bias")
-p2 <- plotResults(data = all_sim_tables, scenarios = 1:4, measure = "mean_absolute_bias", measure_name = "Absolute bias")
-p3 <- plotResults(data = all_sim_tables, scenarios = 1:4, measure = "mean_variance", measure_name = "Variance")
-p4 <- plotResults(data = all_sim_tables, scenarios = 1:4, measure = "mean_mse", measure_name = "MSE")
-p5 <- plotResults(data = all_sim_tables, scenarios = 1:4, measure = "mean_coverage.95", measure_name = "95% coverage")
-p6 <- plotResults(data = all_sim_tables, scenarios = 1:4, measure = "mean_width.95", measure_name = "95% width")
+p1 <- plotResults(data = all_sim_tables, scenarios = 1:4, scenario_names = 1:4,
+                  measure = "mean_bias", measure_name = "Bias")
+p2 <- plotResults(data = all_sim_tables, scenarios = 1:4, scenario_names = 1:4,
+                  measure = "mean_absolute_bias", measure_name = "Absolute bias")
+p3 <- plotResults(data = all_sim_tables, scenarios = 1:4, scenario_names = 1:4,
+                  measure = "mean_variance", measure_name = "Variance")
+p4 <- plotResults(data = all_sim_tables, scenarios = 1:4, scenario_names = 1:4,
+                  measure = "mean_mse", measure_name = "MSE")
+p5 <- plotResults(data = all_sim_tables, scenarios = 1:4, scenario_names = 1:4,
+                  measure = "mean_coverage.95", measure_name = "95% coverage")
+p6 <- plotResults(data = all_sim_tables, scenarios = 1:4, scenario_names = 1:4,
+                  measure = "mean_width.95", measure_name = "95% width")
 
 ggarrange(p1, p2, p3, p4, p5, p6, 
           ncol = 2, nrow = 3, legend = "none")
@@ -121,14 +128,41 @@ ggsave(paste0(dropbox_dir, "/../proj-3-chapter-results/simulation-results-graph-
        width = 8, height = 10)
 
 # graph scenarios 5-7
-p1b <- plotResults(data = all_sim_tables, scenarios = 5:7, measure = "mean_bias", measure_name = "Bias")
-p2b <- plotResults(data = all_sim_tables, scenarios = 5:7, measure = "mean_absolute_bias", measure_name = "Absolute bias")
-p3b <- plotResults(data = all_sim_tables, scenarios = 5:7, measure = "mean_variance", measure_name = "Variance")
-p4b <- plotResults(data = all_sim_tables, scenarios = 5:7, measure = "mean_mse", measure_name = "MSE")
-p5b <- plotResults(data = all_sim_tables, scenarios = 5:7, measure = "mean_coverage.95", measure_name = "95% coverage")
-p6b <- plotResults(data = all_sim_tables, scenarios = 5:7, measure = "mean_width.95", measure_name = "95% width")
+p1b <- plotResults(data = all_sim_tables, scenarios = 5:7, scenario_names = 5:7,
+                   measure = "mean_bias", measure_name = "Bias")
+p2b <- plotResults(data = all_sim_tables, scenarios = 5:7, scenario_names = 5:7,
+                   measure = "mean_absolute_bias", measure_name = "Absolute bias")
+p3b <- plotResults(data = all_sim_tables, scenarios = 5:7, scenario_names = 5:7,
+                   measure = "mean_variance", measure_name = "Variance")
+p4b <- plotResults(data = all_sim_tables, scenarios = 5:7, scenario_names = 5:7,
+                   measure = "mean_mse", measure_name = "MSE")
+p5b <- plotResults(data = all_sim_tables, scenarios = 5:7, scenario_names = 5:7,
+                   measure = "mean_coverage.95", measure_name = "95% coverage")
+p6b <- plotResults(data = all_sim_tables, scenarios = 5:7, scenario_names = 5:7,
+                   measure = "mean_width.95", measure_name = "95% width")
 
 ggarrange(p1b, p2b, p3b, p4b, p5b, p6b, 
           ncol = 2, nrow = 3, legend = "none")
 ggsave(paste0(dropbox_dir, "/../proj-3-chapter-results/simulation-results-graph-scenarios5thru7.pdf"), 
        width = 8, height = 10)
+
+# final exam plots
+fe1 <- plotResults(data = all_sim_tables, scenarios = c(2, 4, 5), scenario_names = 1:3,
+                   measure = "mean_bias", measure_name = "Bias")
+fe2 <- plotResults(data = all_sim_tables, scenarios = c(2, 4, 5), scenario_names = 1:3,
+                   measure = "mean_mse", measure_name = "MSE")
+
+ggarrange(fe1, fe2, 
+          ncol = 2, nrow = 1, legend = "none")
+ggsave(paste0(dropbox_dir, "/../proj-3-chapter-results/final-exam-unit-level-simulation-results-graph-bias-mse.pdf"), 
+       width = 18*0.7, height = 6*0.7)
+
+fe3 <- plotResults(data = all_sim_tables, scenarios = c(2, 4, 5), scenario_names = 1:3,
+                   measure = "mean_coverage.95", measure_name = "95% coverage")
+fe4 <- plotResults(data = all_sim_tables, scenarios = c(2, 4, 5), scenario_names = 1:3,
+                   measure = "mean_width.95", measure_name = "95% width")
+
+ggarrange(fe3, fe4, 
+          ncol = 2, nrow = 1, legend = "none")
+ggsave(paste0(dropbox_dir, "/../proj-3-chapter-results/final-exam-unit-level-simulation-results-graph-cov-width.pdf"), 
+       width = 18*0.7, height = 6*0.7)

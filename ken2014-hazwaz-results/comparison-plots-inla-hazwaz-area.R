@@ -153,8 +153,12 @@ n_stage_2_models <- length(stage_2_list)
 allests <- results_direct %>% as_tibble() %>%
     mutate(model.name = "Direct",
            haz.pred.width95 = qnorm(0.975) * 2 * seHAZ.bi,
-           waz.pred.width95 = qnorm(0.975) * 2 * seWAZ.bi) %>%
-    select(model.name, admin1, admin1.name, meanHAZ.bi, meanWAZ.bi, haz.pred.width95, waz.pred.width95) %>%
+           waz.pred.width95 = qnorm(0.975) * 2 * seWAZ.bi,
+           haz.pred.width80 = qnorm(0.9) * 2 * seHAZ.bi,
+           waz.pred.width80 = qnorm(0.9) * 2 * seWAZ.bi) %>%
+    select(model.name, admin1, admin1.name, meanHAZ.bi, meanWAZ.bi, 
+           haz.pred.width95, waz.pred.width95,
+           haz.pred.width80, waz.pred.width80) %>%
     rename(haz.pred.50 = meanHAZ.bi,
            waz.pred.50 = meanWAZ.bi) %>%
     mutate(haz.iid.50 = NA,
@@ -211,9 +215,11 @@ for (i in 1:length(stage_2_list)) {
                       haz.totre.50 = haz.re.tot, 
                       waz.totre.50 = waz.re.tot,
                       haz.pred.50 = haz.pred$`0.5quant`, 
-                      haz.pred.width95 = haz.pred$`0.975quant` - haz.pred$`0.025quant`, 
                       waz.pred.50 = waz.pred$`0.5quant`, 
-                      waz.pred.width95 = waz.pred$`0.975quant` - waz.pred$`0.025quant`)
+                      haz.pred.width95 = haz.pred$`0.975quant` - haz.pred$`0.025quant`, 
+                      waz.pred.width95 = waz.pred$`0.975quant` - waz.pred$`0.025quant`,
+                      haz.pred.width80 = haz.pred$`0.9quant` - haz.pred$`0.1quant`, 
+                      waz.pred.width80 = waz.pred$`0.9quant` - waz.pred$`0.1quant`)
     
     allests <- allests %>% bind_rows(res.tmp)
 }
@@ -245,74 +251,7 @@ posterior_sd_res %<>% mutate(model_factor = fct_relevel(as.factor(model_name),
                              outcome = ifelse(outcome == "haz", "HAZ", "WAZ"))
 
 # formatting all results ####
-{
-# par.names <- c("$\\beta_1$",
-#                "$\\beta_2$",
-#                "$\\sigma_1$",
-#                "$\\sigma_2$",
-#                "$\\rho_1$",
-#                "$\\rho_2$",
-#                "$\\lambda$")
-# uni.par.ests.b11 <- as_tibble(rbind(mod.stan.summary.haz.uni.b11$summary["beta",],
-#                                     mod.stan.summary.waz.uni.b11$summary["beta",],
-#                                     mod.stan.summary.haz.uni.b11$summary["sigma",],
-#                                     mod.stan.summary.waz.uni.b11$summary["sigma",],
-#                                     mod.stan.summary.haz.uni.b11$summary["rho",],
-#                                     mod.stan.summary.waz.uni.b11$summary["rho",],
-#                                     rep(NA, ncol(mod.stan.summary.haz.uni.b11$summary))))
-# uni.par.ests.b11$parameter <- par.names
-# uni.par.ests.b11$model_name <- "univariate bym2"
-# uni.par.ests.b11$model <- "univariate.bym2"
-# 
-# uni.par.ests.iid <- as_tibble(rbind(mod.stan.summary.haz.uni.iid$summary["beta",],
-#                                     mod.stan.summary.waz.uni.iid$summary["beta",],
-#                                     mod.stan.summary.haz.uni.iid$summary["sigma",],
-#                                     mod.stan.summary.waz.uni.iid$summary["sigma",],
-#                                     rep(NA, ncol(mod.stan.summary.haz.uni.iid$summary)),
-#                                     rep(NA, ncol(mod.stan.summary.haz.uni.iid$summary)),
-#                                     rep(NA, ncol(mod.stan.summary.haz.uni.iid$summary))))
-# uni.par.ests.iid$parameter <- par.names
-# uni.par.ests.iid$model_name <- "univariate iid"
-# uni.par.ests.iid$model <- "univariate.iid"
-# 
-# nonshared.par.ests.b11 <- as_tibble(
-#     rbind(mod.stan.summary.bi.nonshared.b11$summary[!grepl("preds", rownames(mod.stan.summary.bi.nonshared.b11$summary)),],
-#           rep(NA, ncol(mod.stan.summary.bi.nonshared.b11$summary)))
-# )
-# nonshared.par.ests.b11$parameter <- par.names
-# nonshared.par.ests.b11$model_name <- "bivariate nonshared bym2"
-# nonshared.par.ests.b11$model <- "bivariate.nonshared.bym2"
-# 
-# nonshared.par.ests.iid <- as_tibble(
-#     rbind(mod.stan.summary.bi.nonshared.iid$summary[!grepl("preds", rownames(mod.stan.summary.bi.nonshared.iid$summary)),],
-#           rep(NA, ncol(mod.stan.summary.bi.nonshared.iid$summary)),
-#           rep(NA, ncol(mod.stan.summary.bi.nonshared.iid$summary)),
-#           rep(NA, ncol(mod.stan.summary.bi.nonshared.iid$summary)))
-# )
-# nonshared.par.ests.iid$parameter <- par.names
-# nonshared.par.ests.iid$model_name <- "bivariate nonshared iid"
-# nonshared.par.ests.iid$model <- "bivariate.nonshared.iid"
-# 
-# shared.par.ests.b11 <- as_tibble(mod.stan.summary.bi.shared.b11$summary[!grepl("preds", rownames(mod.stan.summary.bi.shared.b11$summary)),])
-# shared.par.ests.b11$parameter <- par.names
-# shared.par.ests.b11$model_name <- "bivariate shared"
-# shared.par.ests.b11$model <- "bivariate.shared"
-# 
-# shared.par.ests.iid <- as_tibble(rbind(mod.stan.summary.bi.shared.iid$summary[!grepl("preds", rownames(mod.stan.summary.bi.shared.iid$summary)),],
-#                                        rep(NA, ncol(mod.stan.summary.bi.shared.iid$summary)),
-#                                        rep(NA, ncol(mod.stan.summary.bi.shared.iid$summary))))
-# shared.par.ests.iid$parameter <- par.names
-# shared.par.ests.iid$model_name <- "bivariate shared iid"
-# shared.par.ests.iid$model <- "bivariate.shared.iid"
-# 
-# all.par.ests <- bind_rows(uni.par.ests.b11,
-#                           uni.par.ests.iid,
-#                           nonshared.par.ests.b11,
-#                           nonshared.par.ests.iid,
-#                           shared.par.ests.b11,
-#                           shared.par.ests.iid) %>%
-#     relocate(c(model, parameter))
-}
+
 all.results <- allests %>%
     pivot_longer(col = !c(model.name, admin1, admin1.name),
                  names_to = c("measure"),
@@ -400,12 +339,12 @@ ggarrange(
                col.regions = plot.palette,
                cuts = length(plot.palette) - 1,
                layout = c(1, 1),
-               main = "Height-for-age"),
+               main = "HAZ"),
     sp::spplot(obj = tmp, zcol = c("Univariate_BYM_waz.pred.50"),
                col.regions = plot.palette,
                cuts = length(plot.palette) - 1,
                layout = c(1, 1),
-               main = "Weight-for-age"),
+               main = "WAZ"),
     ncol = 2
 )
 
@@ -468,32 +407,32 @@ dev.off()
 
 ### univariate BYM scatterplot comparison ####
 all.results.wide <- all.results.wide %>%
-    mutate(Univariate_BYM_haz.lower.95 = Univariate_BYM_haz.pred.50 - Univariate_BYM_haz.pred.width95/2,
-           Univariate_BYM_haz.upper.95 = Univariate_BYM_haz.pred.50 + Univariate_BYM_haz.pred.width95/2,
-           Univariate_BYM_waz.lower.95 = Univariate_BYM_waz.pred.50 - Univariate_BYM_waz.pred.width95/2,
-           Univariate_BYM_waz.upper.95 = Univariate_BYM_waz.pred.50 + Univariate_BYM_waz.pred.width95/2)
+    mutate(Univariate_BYM_haz.lower.80 = Univariate_BYM_haz.pred.50 - Univariate_BYM_haz.pred.width80/2,
+           Univariate_BYM_haz.upper.80 = Univariate_BYM_haz.pred.50 + Univariate_BYM_haz.pred.width80/2,
+           Univariate_BYM_waz.lower.80 = Univariate_BYM_waz.pred.50 - Univariate_BYM_waz.pred.width80/2,
+           Univariate_BYM_waz.upper.80 = Univariate_BYM_waz.pred.50 + Univariate_BYM_waz.pred.width80/2)
 
 p1 <- ggplot(all.results.wide,
              aes(x = Univariate_BYM_waz.pred.50, 
                  y = Univariate_BYM_haz.pred.50,
-                 ymin = Univariate_BYM_haz.lower.95, ymax = Univariate_BYM_haz.upper.95,
-                 xmin = Univariate_BYM_waz.lower.95, xmax = Univariate_BYM_waz.upper.95)) +
+                 ymin = Univariate_BYM_haz.lower.80, ymax = Univariate_BYM_haz.upper.80,
+                 xmin = Univariate_BYM_waz.lower.80, xmax = Univariate_BYM_waz.upper.80)) +
     geom_point(cex = 1.5, alpha = 0.7) + 
     geom_errorbar(alpha  = 0.7) +
     geom_errorbarh(alpha = 0.7) +
     geom_smooth(method = "lm", formula = y ~ x, alpha = 0.5) +
-    ylab("Height-for-age") +
-    xlab("Weight-for-age") +
-    ggtitle("Posterior median estimates") +
+    ylab("HAZ") +
+    xlab("WAZ") +
+    ggtitle("Posterior medians with 80% CIs") +
     theme_light()
 p2 <- ggplot(all.results.wide,
-             aes(x = Univariate_BYM_waz.pred.width95, 
-                 y = Univariate_BYM_haz.pred.width95)) +
+             aes(x = Univariate_BYM_waz.pred.width80, 
+                 y = Univariate_BYM_haz.pred.width80)) +
     geom_point(cex = 1.5, alpha = 0.7) + 
     geom_abline(slope = 1, intercept = 0, col = "darkgreen", alpha = 0.5, lwd = 1.25) +
-    ylab("Height-for-age") +
-    xlab("Weight-for-age") +
-    ggtitle("95% CI widths") +
+    ylab("HAZ") +
+    xlab("WAZ") +
+    ggtitle("80% CI widths") +
     theme_light()
 
 ggarrange(p1, p2, ncol = 2)
