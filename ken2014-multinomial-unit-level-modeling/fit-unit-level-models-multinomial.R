@@ -36,6 +36,12 @@ results.long <- dat_c %>% select(admin1, admin1.name, admin1.char,
     summarize(count = n()) %>%
     ungroup()
 
+# outcome indicators
+results.long$contraceptive.none <- ifelse(results.long$contraceptive == "none", 1, 0)
+results.long$contraceptive.modern <- ifelse(results.long$contraceptive == "modern", 1, 0)
+results.long$contraceptive.other <- ifelse(results.long$contraceptive == "other", 1, 0)
+
+# admin 1 indicators
 results.long$admin1.none<- ifelse(results.long$contraceptive == "none", results.long$admin1, NA)
 results.long$admin1.modern <- ifelse(results.long$contraceptive == "modern", results.long$admin1, NA)
 results.long$admin1.other <- ifelse(results.long$contraceptive == "other", results.long$admin1, NA)
@@ -69,6 +75,7 @@ iid_prior <- list(prec = list(prior = "pc.prec",
 bym2_prior <- list(phi=list(prior="logitbeta", param=c(1, 1), initial=0.5), 
                    prec=list(prior="pc.prec", param=c(1, 0.01), initial=5))
 lambda_prior <- list(beta = list(prior = 'logtnormal', param = c(0, 1)))
+flat_prior <- list(prec = list(prior = "gaussian", param = c(0, 0)))
 
 # models to run  ####
 model_names <- c("IID nonshared", "BYM nonshared",
@@ -78,12 +85,15 @@ model_names <- c("IID nonshared", "BYM nonshared",
 formulas <- vector(mode = "list", length = length(model_names))
 names(formulas) <- model_names
 
-formulas[["IID nonshared"]] <- formula("count ~ -1 + contraceptive_factor + rural.none + rural.modern + rural.other + 
+formulas[["IID nonshared"]] <- formula("count ~ -1 + contraceptive.none + contraceptive.modern + 
+                                        rural.none + rural.modern + 
+                                        factor(cluster) +
                                         f(admin1.modern, model = 'iid', hyper = iid_prior) +
-                                        f(admin1.none, model = 'iid', hyper = iid_prior) +
-                                        f(cluster, model = 'iid', hyper = iid_prior)")
+                                        f(admin1.none, model = 'iid', hyper = iid_prior)")
 
-formulas[["BYM nonshared"]] <- formula("count ~ -1 + contraceptive_factor + rural.none + rural.modern + rural.other + 
+formulas[["BYM nonshared"]] <- formula("count ~ -1 + contraceptive.none + contraceptive.modern + 
+                                        rural.none + rural.modern + 
+                                        factor(cluster) +
                                         f(admin1.modern, model = 'bym2',
                                              graph = admin1.mat, 
                                              scale.model = T, 
@@ -93,15 +103,17 @@ formulas[["BYM nonshared"]] <- formula("count ~ -1 + contraceptive_factor + rura
                                               graph = admin1.mat, 
                                               scale.model = T, 
                                               constr = T,
-                                              hyper = bym2_prior) +
-                                        f(cluster, model = 'iid', hyper = iid_prior)")
-formulas[["IID shared"]] <- formula("count ~ -1 + contraceptive_factor + rural.none + rural.modern + rural.other +
+                                              hyper = bym2_prior)")
+formulas[["IID shared"]] <- formula("count ~ -1 + contraceptive.none + contraceptive.modern + 
+                                        rural.none + rural.modern + 
+                                        factor(cluster) +
                                         f(admin1.modern, model = 'iid', hyper = iid_prior) +
                                         f(admin1.none, model = 'iid', hyper = iid_prior) +
                                         f(admin1.none.2, copy = \"admin1.modern\", 
-                                          fixed = FALSE, hyper = lambda_prior) +
-                                        f(cluster, model = 'iid', hyper = iid_prior)")
-formulas[["BYM shared"]] <- formula("count ~ -1 + contraceptive_factor + rural.none + rural.modern + rural.other + 
+                                          fixed = FALSE, hyper = lambda_prior)")
+formulas[["BYM shared"]] <- formula("count ~ -1 + contraceptive.none + contraceptive.modern + 
+                                        rural.none + rural.modern + 
+                                        factor(cluster) +
                                         f(admin1.modern, model = 'bym2',
                                              graph = admin1.mat, 
                                              scale.model = T, 
@@ -113,8 +125,7 @@ formulas[["BYM shared"]] <- formula("count ~ -1 + contraceptive_factor + rural.n
                                               constr = T,
                                               hyper = bym2_prior) +
                                         f(admin1.none.2, copy = \"admin1.modern\", 
-                                          fixed = FALSE, hyper = lambda_prior) +
-                                        f(cluster, model = 'iid', hyper = iid_prior)")
+                                          fixed = FALSE, hyper = lambda_prior)")
 
 # modeling ####
 model_results <- vector(mode = "list", length = length(model_names))
@@ -134,7 +145,7 @@ for (i in 1:length(model_names)) {
                 # control.family = list(),
                 control.predictor = list(compute=T),
                 # control.inla = list(lincomb.derived.correlation.matrix=T),
-                # control.fixed = list(prec = list(default = 0.001), correlation.matrix=T),
+                control.fixed = list(prec = 0),
                 control.compute = list(config=T, waic = TRUE, dic = TRUE, cpo = TRUE))
     # print(model_results[[ model_names[i] ]]$summary.fixed)
     # print(model_results[[ model_names[i] ]]$summary.hyperpar)
@@ -157,11 +168,11 @@ for (i in 1:length(model_names)) {
     rownames(hyperpar_mat) <- hyperpar_names
     
     # process fitted values
-    none_fe_idx <- which(rownames(samp[[1]]$latent) %in% c("contraceptive_factornone:1"))
+    none_fe_idx <- which(rownames(samp[[1]]$latent) %in% c("contraceptive.none:1"))
     none_fe_mat <- matrix(NA, nrow = length(none_fe_idx), ncol = nsamps)
-    modern_fe_idx <- which(rownames(samp[[1]]$latent) %in% c("contraceptive_factormodern:1"))
+    modern_fe_idx <- which(rownames(samp[[1]]$latent) %in% c("contraceptive.modern:1"))
     modern_fe_mat <- matrix(NA, nrow = length(modern_fe_idx), ncol = nsamps)
-    other_fe_idx <- which(rownames(samp[[1]]$latent) %in% c("contraceptive_factorother:1"))
+    other_fe_idx <- which(rownames(samp[[1]]$latent) %in% c("contraceptive.other:1"))
     other_fe_mat <- matrix(NA, nrow = length(other_fe_idx), ncol = nsamps)
 
     none_rural_fe_idx <- which(rownames(samp[[1]]$latent) %in% c("rural.none:1"))
@@ -226,9 +237,11 @@ for (i in 1:length(model_names)) {
     fitted_none_rural_mat <- none_rural_fe_tot_mat[rep(1,n_regions),] + none_re_tot_mat
     fitted_modern_urban_mat <- modern_urban_fe_tot_mat[rep(1,n_regions),] + modern_re_tot_mat
     fitted_modern_rural_mat <- modern_rural_fe_tot_mat[rep(1,n_regions),] + modern_re_tot_mat
-    fitted_other_urban_mat <- other_urban_fe_tot_mat[rep(1,n_regions),]
-    fitted_other_rural_mat <- other_rural_fe_tot_mat[rep(1,n_regions),]
-    
+    # fitted_other_urban_mat <- other_urban_fe_tot_mat[rep(1,n_regions),]
+    # fitted_other_rural_mat <- other_rural_fe_tot_mat[rep(1,n_regions),]    
+    fitted_other_urban_mat <- matrix(0, nrow = n_regions, ncol = nsamps)
+    fitted_other_rural_mat <- matrix(0, nrow = n_regions, ncol = nsamps)
+
     # transform estimates
     fitted_array_urban <- array(c(fitted_none_urban_mat, fitted_modern_urban_mat, fitted_other_urban_mat), 
                                 dim = c(n_regions, nsamps, 3))

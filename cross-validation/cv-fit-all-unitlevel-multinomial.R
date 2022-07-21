@@ -78,6 +78,12 @@ results.long <- dat_c %>% select(admin1, admin1.name, admin1.char,
            weights = unique(weights %>% na.omit())) %>% 
     ungroup()
 
+# outcome indicators
+results.long$contraceptive.none <- ifelse(results.long$contraceptive == "none", 1, 0)
+results.long$contraceptive.modern <- ifelse(results.long$contraceptive == "modern", 1, 0)
+results.long$contraceptive.other <- ifelse(results.long$contraceptive == "other", 1, 0)
+
+# admin 1 indicators
 results.long$admin1.none<- ifelse(results.long$contraceptive == "none", results.long$admin1, NA)
 results.long$admin1.modern <- ifelse(results.long$contraceptive == "modern", results.long$admin1, NA)
 results.long$admin1.other <- ifelse(results.long$contraceptive == "other", results.long$admin1, NA)
@@ -120,12 +126,15 @@ n_models <- length(model_names)
 formulas <- vector(mode = "list", length = length(model_names))
 names(formulas) <- model_names
 
-formulas[["IID nonshared"]] <- formula("count ~ -1 + contraceptive_factor + rural.none + rural.modern + rural.other + 
+formulas[["IID nonshared"]] <- formula("count ~ -1 + contraceptive.none + contraceptive.modern + 
+                                        rural.none + rural.modern + 
+                                        factor(cluster) +
                                         f(admin1.modern, model = 'iid', hyper = iid_prior) +
-                                        f(admin1.none, model = 'iid', hyper = iid_prior) +
-                                        f(cluster, model = 'iid', hyper = iid_prior)")
+                                        f(admin1.none, model = 'iid', hyper = iid_prior)")
 
-formulas[["BYM nonshared"]] <- formula("count ~ -1 + contraceptive_factor + rural.none + rural.modern + rural.other + 
+formulas[["BYM nonshared"]] <- formula("count ~ -1 + contraceptive.none + contraceptive.modern + 
+                                        rural.none + rural.modern + 
+                                        factor(cluster) +
                                         f(admin1.modern, model = 'bym2',
                                              graph = admin1.mat, 
                                              scale.model = T, 
@@ -135,15 +144,17 @@ formulas[["BYM nonshared"]] <- formula("count ~ -1 + contraceptive_factor + rura
                                               graph = admin1.mat, 
                                               scale.model = T, 
                                               constr = T,
-                                              hyper = bym2_prior) +
-                                        f(cluster, model = 'iid', hyper = iid_prior)")
-formulas[["IID shared"]] <- formula("count ~ -1 + contraceptive_factor + rural.none + rural.modern + rural.other +
+                                              hyper = bym2_prior)")
+formulas[["IID shared"]] <- formula("count ~ -1 + contraceptive.none + contraceptive.modern + 
+                                        rural.none + rural.modern + 
+                                        factor(cluster) +
                                         f(admin1.modern, model = 'iid', hyper = iid_prior) +
                                         f(admin1.none, model = 'iid', hyper = iid_prior) +
                                         f(admin1.none.2, copy = \"admin1.modern\", 
-                                          fixed = FALSE, hyper = lambda_prior) +
-                                        f(cluster, model = 'iid', hyper = iid_prior)")
-formulas[["BYM shared"]] <- formula("count ~ -1 + contraceptive_factor + rural.none + rural.modern + rural.other + 
+                                          fixed = FALSE, hyper = lambda_prior)")
+formulas[["BYM shared"]] <- formula("count ~ -1 + contraceptive.none + contraceptive.modern + 
+                                        rural.none + rural.modern + 
+                                        factor(cluster) +
                                         f(admin1.modern, model = 'bym2',
                                              graph = admin1.mat, 
                                              scale.model = T, 
@@ -155,8 +166,7 @@ formulas[["BYM shared"]] <- formula("count ~ -1 + contraceptive_factor + rural.n
                                               constr = T,
                                               hyper = bym2_prior) +
                                         f(admin1.none.2, copy = \"admin1.modern\", 
-                                          fixed = FALSE, hyper = lambda_prior) +
-                                        f(cluster, model = 'iid', hyper = iid_prior)")
+                                          fixed = FALSE, hyper = lambda_prior)")
 
 # survey object for calculating direct estimates
 my.svydesign <- survey::svydesign(ids = ~ cluster,
@@ -226,11 +236,11 @@ for (r in 1:n_regions) {
         samp <- inla.posterior.sample(n = nsamps, mod_list[[mm]])
         
         # process fitted values
-        none_fe_idx <- which(rownames(samp[[1]]$latent) %in% c("contraceptive_factornone:1"))
+        none_fe_idx <- which(rownames(samp[[1]]$latent) %in% c("contraceptive.none:1"))
         none_fe_mat <- matrix(NA, nrow = length(none_fe_idx), ncol = nsamps)
-        modern_fe_idx <- which(rownames(samp[[1]]$latent) %in% c("contraceptive_factormodern:1"))
+        modern_fe_idx <- which(rownames(samp[[1]]$latent) %in% c("contraceptive.modern:1"))
         modern_fe_mat <- matrix(NA, nrow = length(modern_fe_idx), ncol = nsamps)
-        other_fe_idx <- which(rownames(samp[[1]]$latent) %in% c("contraceptive_factorother:1"))
+        other_fe_idx <- which(rownames(samp[[1]]$latent) %in% c("contraceptive.other:1"))
         other_fe_mat <- matrix(NA, nrow = length(other_fe_idx), ncol = nsamps)
         
         none_rural_fe_idx <- which(rownames(samp[[1]]$latent) %in% c("rural.none:1"))
@@ -283,8 +293,10 @@ for (r in 1:n_regions) {
         fitted_none_rural_mat <- none_rural_fe_tot_mat[rep(1,n_regions),] + none_re_tot_mat
         fitted_modern_urban_mat <- modern_urban_fe_tot_mat[rep(1,n_regions),] + modern_re_tot_mat
         fitted_modern_rural_mat <- modern_rural_fe_tot_mat[rep(1,n_regions),] + modern_re_tot_mat
-        fitted_other_urban_mat <- other_urban_fe_tot_mat[rep(1,n_regions),]
-        fitted_other_rural_mat <- other_rural_fe_tot_mat[rep(1,n_regions),]
+        # fitted_other_urban_mat <- other_urban_fe_tot_mat[rep(1,n_regions),]
+        # fitted_other_rural_mat <- other_rural_fe_tot_mat[rep(1,n_regions),]
+        fitted_other_urban_mat <- matrix(0, nrow = n_regions, ncol = nsamps)
+        fitted_other_rural_mat <- matrix(0, nrow = n_regions, ncol = nsamps)
         
         # differences in fitted estimates = logits
         fitted_m_n_urban <- fitted_modern_urban_mat - fitted_none_urban_mat

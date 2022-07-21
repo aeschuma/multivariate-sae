@@ -40,7 +40,7 @@ model_names <- names(posteriors)
 n_regions <- nrow(admin1.mat)
 
 # what's our final model?
-final_model <- "BYM nonshared"
+final_model <- "BYM shared"
 # format posterior estimates ####
 
 ## SDs ####
@@ -268,25 +268,23 @@ for (oo in 1:length(outcomes)) {
 fres <- fits[[final_model]]
 
 # extract fixed intercepts
-fe <- fres$summary.fixed[, c(3:7)]
+fe <- fres$summary.fixed[1:4, c(3:7)]
 
 # extract hyperparameters and lambda
 hyper <- fres$summary.hyperpar[, c(3:7)]
 
 # convert precision to st dev
-hyper[c(1, 3, 5),] <- (hyper[c(1, 3, 5),])^(-0.5)
-hyper[c(1, 3, 5), ] <- hyper[c(1, 3, 5), 5:1]
+hyper[c(1, 3),] <- (hyper[c(1, 3),])^(-0.5)
+hyper[c(1, 3), ] <- hyper[c(1, 3), 5:1]
 
 # make table
 finres <- cbind(parameter =c("$\\beta_{\\text{none}}$", 
                              "$\\beta_{\\text{modern}}$", 
-                             "$\\beta_{\\text{other}}$",
                              "$\\gamma_{\\text{none}}$", 
                              "$\\gamma_{\\text{modern}}$", 
-                             "$\\gamma_{\\text{other}}$",
-                             "$\\sigma_1$", "$\\rho_1$",
-                             "$\\sigma_2$", "$\\rho_2$",
-                             "$\\sigma_{\\epsilon}$"),
+                             "$\\sigma_{\\text{modern}}$", "$\\rho_{\\text{modern}}$",
+                             "$\\sigma_{\\text{none}}$", "$\\rho_{\\text{none}}$",
+                             "$\\lambda$"),
                 rbind(fe, hyper))
 rownames(finres) <- NULL
 write_rds(finres, paste0(savedir, "final_table_multinomial.rds"))
@@ -315,35 +313,35 @@ plotres$region <- plotres$region_med
 # plotting 
 tmp <- merge(poly.adm1, plotres,
              by = "region")
-pdf(paste0(savedir, "nonshared-bym-multinomial-pred-width95.pdf"), width = 9, height = 6)
+pdf(paste0(savedir, "shared-bym-multinomial-pred-width95.pdf"), width = 9, height = 6)
 
 grid.arrange(
-    sp::spplot(obj = tmp, zcol = c("none_BYM_nonshared_med"),
+    sp::spplot(obj = tmp, zcol = c("none_BYM_shared_med"),
                col.regions = plot.palette,
                cuts = length(plot.palette) - 1,
                layout = c(1, 1),
                main = "None post. med"),
-    sp::spplot(obj = tmp, zcol = c("modern_BYM_nonshared_med"),
+    sp::spplot(obj = tmp, zcol = c("modern_BYM_shared_med"),
                col.regions = plot.palette,
                cuts = length(plot.palette) - 1,
                layout = c(1, 1),
                main = "Modern post. med"),
-    sp::spplot(obj = tmp, zcol = c("other_BYM_nonshared_med"),
+    sp::spplot(obj = tmp, zcol = c("other_BYM_shared_med"),
                col.regions = plot.palette,
                cuts = length(plot.palette) - 1,
                layout = c(1, 1),
                main = "Other post. med"),
-    sp::spplot(obj = tmp, zcol = c("none_BYM_nonshared_width.95"),
+    sp::spplot(obj = tmp, zcol = c("none_BYM_shared_width.95"),
                col.regions = plot.palette,
                cuts = length(plot.palette) - 1,
                layout = c(1, 1),
                main = "None 95% width"),
-    sp::spplot(obj = tmp, zcol = c("modern_BYM_nonshared_width.95"),
+    sp::spplot(obj = tmp, zcol = c("modern_BYM_shared_width.95"),
                col.regions = plot.palette,
                cuts = length(plot.palette) - 1,
                layout = c(1, 1),
                main = "Modern 95% width"),
-    sp::spplot(obj = tmp, zcol = c("other_BYM_nonshared_width.95"),
+    sp::spplot(obj = tmp, zcol = c("other_BYM_shared_width.95"),
                col.regions = plot.palette,
                cuts = length(plot.palette) - 1,
                layout = c(1, 1),
@@ -358,7 +356,7 @@ dev.off()
 
 tmp <- merge(poly.adm1, RE_dat,
              by = "region")
-pdf(paste0(savedir, "nonshared-bym-multinomial-iid-icar.pdf"), width = 12, height = 7)
+pdf(paste0(savedir, "shared-bym-multinomial-iid-icar.pdf"), width = 12, height = 7)
 
 grid.arrange(
     sp::spplot(obj = tmp, zcol = c("none_re_tot", "modern_re_tot"),
