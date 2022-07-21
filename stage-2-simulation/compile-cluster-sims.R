@@ -12,7 +12,7 @@ library(tidyverse); library(magrittr);
 ## TESTING THE CODE?
 ########
 
-testing <- TRUE
+testing <- FALSE
 
 ## define directories
 
