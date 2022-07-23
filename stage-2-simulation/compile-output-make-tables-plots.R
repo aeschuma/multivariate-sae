@@ -44,7 +44,7 @@ run_numbers <- sort(run_numbers)
 
 # read in results and display in tables
 tmps <- vector(mode = "list", length = length(run_numbers))
-which_runs <- c(1, 6:10, 2:3, 5) # remember to put in the order of the scenarios in the sims in the chapter
+which_runs <- c(6:1, 7:9) # remember to put in the order of the scenarios in the sims in the chapter
 
 run_results <- vector(mode = "list", length = length(which_runs))
 
@@ -58,16 +58,16 @@ for (i in 1:length(which_runs)) {
     
     dgmnum <- res_run$dgm_number[res_run$run_number == run_number]
     
-    run_results[[i]] <- cbind(model = c(model_names[1], ""), tmps[[i]][[1]])
+    run_results[[i]] <- cbind(model = c(model_names[1], ""), tmps[[i]][[1]] %>% filter(param %in% c("lm_haz", "lm_waz")))
     if (length(tmps[[i]]) > 1) {
         for (j in 2:length(tmps[[i]])) {
             # extract latent mean results
             tmp_res <- cbind(model = c(model_names[j], ""), 
-                             tmps[[i]][[j]][tmps[[i]][[j]]$param %in% c("HAZ latent means", "WAZ latent means"),])
+                             tmps[[i]][[j]][tmps[[i]][[j]]$param %in% c("lm_haz", "lm_waz"),])
             run_results[[i]] <- rbind(run_results[[i]], tmp_res)
         }   
     }
-    run_results[[i]]$param <- ifelse(run_results[[i]]$param == "HAZ latent means", "outcome 1", "outcome 2")
+    run_results[[i]]$param <- ifelse(run_results[[i]]$param == "lm_haz", "outcome 1", "outcome 2")
     run_results[[i]]$dgm <- dgmnum
     rownames(run_results[[i]]) <- NULL
 }
@@ -112,31 +112,39 @@ plotResults <- function(data, scenarios, scenario_names, measure, measure_name) 
 
 # graph scenarios 1-6
 p1 <- plotResults(data = all_sim_tables, scenarios = 1:6, scenario_names = 1:6,
-                  measure = "mean_bias", measure_name = "Mean bias")
+                  measure = "bias", measure_name = "Bias")
 p2 <- plotResults(data = all_sim_tables, scenarios = 1:6, scenario_names = 1:6,
-                  measure = "mean_absolute_bias", measure_name = "Mean absolute bias")
+                  measure = "relbias", measure_name = "Relative bias")
 p3 <- plotResults(data = all_sim_tables, scenarios = 1:6, scenario_names = 1:6,
-                  measure = "mean_coverage.95", measure_name = "95% coverage")
+                  measure = "var", measure_name = "Variance")
 p4 <- plotResults(data = all_sim_tables, scenarios = 1:6, scenario_names = 1:6,
-                  measure = "mean_width.95", measure_name = "95% width")
+                  measure = "mse", measure_name = "MSE")
+p5 <- plotResults(data = all_sim_tables, scenarios = 1:6, scenario_names = 1:6,
+                  measure = "cov95", measure_name = "95% coverage")
+p6 <- plotResults(data = all_sim_tables, scenarios = 1:6, scenario_names = 1:6,
+                  measure = "width95", measure_name = "95% width")
 
-ggarrange(p1, p2, p3, p4, ncol = 1, nrow = 4, legend = "none")
+ggarrange(p1, p2, p3, p4, p5, p6, ncol = 2, nrow = 3, legend = "none")
 ggsave(paste0(dropbox_dir, "/../proj-2-chapter-results/simulation-results-graph-scenarios1thru6.pdf"), 
-       width = 8.5, height = 11)
+       width = 9.5, height = 10)
 
 # graph scenarios 7-9
-p5 <- plotResults(data = all_sim_tables, scenarios = 7:9, scenario_names = 7:9,
-                  measure = "mean_bias", measure_name = "Mean bias")
-p6 <- plotResults(data = all_sim_tables, scenarios = 7:9, scenario_names = 7:9,
-                  measure = "mean_absolute_bias", measure_name = "Mean absolute bias")
-p7 <- plotResults(data = all_sim_tables, scenarios = 7:9, scenario_names = 7:9,
-                  measure = "mean_coverage.95", measure_name = "95% coverage")
-p8 <- plotResults(data = all_sim_tables, scenarios = 7:9, scenario_names = 7:9,
-                  measure = "mean_width.95", measure_name = "95% width")
+p1a <- plotResults(data = all_sim_tables, scenarios = 7:9, scenario_names = 7:9,
+                  measure = "bias", measure_name = "Bias")
+p2a <- plotResults(data = all_sim_tables, scenarios = 7:9, scenario_names = 7:9,
+                  measure = "relbias", measure_name = "Relative bias")
+p3a <- plotResults(data = all_sim_tables, scenarios = 7:9, scenario_names = 7:9,
+                  measure = "var", measure_name = "Variance")
+p4a <- plotResults(data = all_sim_tables, scenarios = 7:9, scenario_names = 7:9,
+                  measure = "mse", measure_name = "MSE")
+p5a <- plotResults(data = all_sim_tables, scenarios = 7:9, scenario_names = 7:9,
+                  measure = "cov95", measure_name = "95% coverage")
+p6a <- plotResults(data = all_sim_tables, scenarios = 7:9, scenario_names = 7:9,
+                  measure = "width95", measure_name = "95% width")
 
-ggarrange(p5, p6, p7, p8, ncol = 1, nrow = 4, legend = "none")
+ggarrange(p1a, p2a, p3a, p4a, p5a, p6a, ncol = 2, nrow = 3, legend = "none")
 ggsave(paste0(dropbox_dir, "/../proj-2-chapter-results/simulation-results-graph-scenarios7thru9.pdf"), 
-       width = 8.5, height = 11)
+       width = 8.5, height = 10)
 
 ## final exam plots
 fe1 <- plotResults(data = all_sim_tables, scenarios = c(5, 6, 7), scenario_names = 1:3,
