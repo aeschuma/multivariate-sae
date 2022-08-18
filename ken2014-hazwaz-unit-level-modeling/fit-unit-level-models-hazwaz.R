@@ -148,9 +148,10 @@ for (i in 1:length(model_names)) {
                 quantiles=c(0.025, 0.1, 0.5, 0.9, 0.975),
                 # control.family = list(),
                 control.predictor = list(compute=T),
-                # control.inla = list(lincomb.derived.correlation.matrix=T),
+                # control.inla = list(int.strategy = "grid"),
                 # control.fixed = list(prec = list(default = 0.001), correlation.matrix=T),
-                control.compute = list(config=T, waic = TRUE, dic = TRUE, cpo = TRUE))
+                control.compute = list(config=T, waic = TRUE, dic = TRUE, cpo = TRUE),
+                selection = list(`Precision for the Gaussian observations`, `Precision for cluster.haz`))
     
     # fit and plot univariate models if we want to
     # if (grepl("univariate", model_names[i])) {
@@ -202,7 +203,8 @@ for (i in 1:length(model_names)) {
     # }
     
     # extract and format results
-    samp <- inla.posterior.sample(n = nsamps, result = tmp)
+    samp <- inla.posterior.sample(n = nsamps, result = tmp, use.improved.mean = TRUE)
+    samp2 <- inla.hyperpar.sample(n = nsamps, result = tmp)
     
     # save summaries
     model_results[[ model_names[i] ]]$summaries <- list()
@@ -218,6 +220,20 @@ for (i in 1:length(model_names)) {
     }
     rownames(hyperpar_mat) <- hyperpar_names
     
+    # pdf("bivariate-ind-cluster-precision-hyperpar-plot.pdf", width = 8, height = 4)
+    # par(mfrow = c(1, 2))
+    # plot(samp2[,"Precision for the Gaussian observations"], 
+    #      samp2[,"Precision for cluster.haz"],
+    #      xlab = "Gaussian precision",
+    #      ylab = "Cluster precision", 
+    #      main = "HAZ")
+    # plot(samp2[,"Precision for the Gaussian observations[2]"], 
+    #      samp2[,"Precision for cluster.waz"],
+    #      xlab = "Gaussian precision",
+    #      ylab = "Cluster precision", 
+    #      main = "WAZ")
+    # dev.off()
+    # 
     # process fitted values
     haz_fe_idx <- rownames(samp[[1]]$latent) %>% str_detect("outcomeHAZ:1") %>% which()
     waz_fe_idx <- rownames(samp[[1]]$latent) %>% str_detect("outcomeWAZ:1") %>% which()

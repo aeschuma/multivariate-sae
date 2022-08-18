@@ -326,10 +326,22 @@ plot.palette <- viridis(n_cats)
 all.results.wide <- all.results %>%
     select(admin1.name, model.name, measure, value) %>%
     pivot_wider(names_from = c(model.name, measure), values_from = value)
-names(all.results.wide) <- gsub(" ", "_", names(all.results.wide))
+names(all.results.wide) <- gsub(" ", "_", names(all.results.wide)) 
+all.results.wide <- left_join(all.results.wide, results_direct %>% select(admin1.name, corr.bi))
 
 tmp <- merge(poly.adm1, all.results.wide,
              by.x = "NAME_1", by.y = "admin1.name")
+
+### map of correlations
+pdf("correlations-haz-waz-map.pdf", width = 5, height = 5)
+
+sp::spplot(obj = tmp, zcol = c("corr.bi"),
+           col.regions = plot.palette,
+           cuts = length(plot.palette) - 1,
+           layout = c(1, 1),
+           main = "Stage 1 correlations")
+
+dev.off()
 
 ### comparison of univariate BYM HAZ and WAZ models ####
 

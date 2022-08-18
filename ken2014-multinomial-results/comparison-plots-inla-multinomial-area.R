@@ -443,10 +443,26 @@ ggsave("posterior_sd_compare-multinomial.pdf", width = 7, height = 4)
 n_cats <- 15
 plot.palette <- viridis(n_cats)
 
+# format for making maps
 all.results.wide <- all.results %>%
     select(admin1.name, model.name, measure, value) %>%
     pivot_wider(names_from = c(model.name, measure), values_from = value)
-names(all.results.wide) <- gsub(" ", "_", names(all.results.wide))
+names(all.results.wide) <- gsub(" ", "_", names(all.results.wide)) 
+all.results.wide <- left_join(all.results.wide, results_direct %>% select(admin1.name, corr))
+
+tmp <- merge(poly.adm1, all.results.wide,
+             by.x = "NAME_1", by.y = "admin1.name")
+
+### map of correlations
+pdf("correlations-multinomial-map.pdf", width = 5, height = 5)
+
+sp::spplot(obj = tmp, zcol = c("corr"),
+           col.regions = plot.palette,
+           cuts = length(plot.palette) - 1,
+           layout = c(1, 1),
+           main = "Stage 1 correlations")
+
+dev.off()
 
 ## RE compare ####
 # plot random effects
