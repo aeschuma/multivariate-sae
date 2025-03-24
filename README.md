@@ -1,2 +1,2 @@
-# survey-csmf
-This repository contains code for developing models to estimate cause-specific mortality fractions across space over time from complex survey data
+# multivariate-sae
+This repository contains code for developing models to estimate multivariate outcomes from complex survey data using small area estimation techniques
